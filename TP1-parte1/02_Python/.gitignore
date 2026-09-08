@@ -1,0 +1,10 @@
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Salida de las corridas manuales
+salidaPython

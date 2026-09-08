@@ -1,0 +1,3 @@
+# El programa (src/mortal_kombat.py) usa solo la biblioteca estandar: no necesita nada de aca.
+# Esta dependencia es unicamente para reproducir el grafico de tiempo vs. hilos del cuaderno.
+matplotlib>=3.5

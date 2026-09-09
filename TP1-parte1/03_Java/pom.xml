@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>ar.edu.unlam.progconcurrente</groupId>
+  <artifactId>tp1-parte1-arbol-procesos</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>TP1 Parte 1 - Ejercicio 1 - Arbol de procesos</name>
+  <description>
+    Arbol de procesos del sistema operativo (A..I) creado con ProcessBuilder.
+    Programacion Concurrente - UNLaM - Modalidad 1.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>17</maven.compiler.release>
+    <main.class>arbolprocesos.Main</main.class>
+    <exec.maven.plugin.version>3.1.0</exec.maven.plugin.version>
+    <maven.jar.plugin.version>3.3.0</maven.jar.plugin.version>
+  </properties>
+
+  <build>
+    <finalName>arbol-procesos</finalName>
+
+    <plugins>
+      <!-- Genera un jar ejecutable: java -jar target/arbol-procesos.jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>${maven.jar.plugin.version}</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- Permite ejecutar sin empaquetar: mvn exec:java -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>${exec.maven.plugin.version}</version>
+        <configuration>
+          <mainClass>${main.class}</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

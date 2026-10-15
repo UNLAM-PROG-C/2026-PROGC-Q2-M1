@@ -57,26 +57,12 @@ int CountActiveWorkers(const std::vector<Worker> &workers)
 - Ningún literal numérico con significado de negocio en el código: usar **constantes con nombre descriptivo**.
 - Se aceptan `0`, `1` o `-1` cuando su significado es obvio por contexto (inicializar un contador, incrementar, etc.).
 
-```cpp
-// Mal
-std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-// Bien
-constexpr int kProducerDelayMs = 500;
-std::this_thread::sleep_for(std::chrono::milliseconds(kProducerDelayMs));
-```
-
-### 7. Código en inglés
-
-- **Todo** el código va en inglés, sin excepción: nombres de variables, funciones, clases, constantes, archivos, mensajes de log y de error.
-
 ## Flujo de trabajo
 
 ### 1. Commits
 
-- Formato [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `style:`, etc.
+- Formato [Conventional Commits]: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `style:`, etc.
 - La descripción del commit va **en español**; el prefijo de tipo (`feat:`, `fix:`, etc.) se mantiene en inglés.
-- Ejemplo: `feat: agregar buffer acotado para productor-consumidor`
 - **Sin atribución de IA** en los mensajes de commit ni en las descripciones de PR (nada de `Co-Authored-By: Claude`, "Generated with Claude Code" ni similares).
 
 ### 2. OpenSpec para cambios grandes
@@ -93,14 +79,9 @@ std::this_thread::sleep_for(std::chrono::milliseconds(kProducerDelayMs));
 ### 4. Idioma
 
 - **Documentación y comentarios**: español rioplatense.
-- **Código**: inglés (ver regla 7 de estándares).
-
-```cpp
-// Esperamos a que el buffer tenga lugar antes de producir.
-buffer_not_full_.wait(lock, [this] { return items_.size() < kBufferCapacity; });
-```
+- **Código**: en inglés, sin excepción.
 
 ### 5. Tests
 
-- **Nunca** modificar código de producción solo para que un test pase sin implementar correctamente el comportamiento esperado (nada de casos especiales para el test, valores hardcodeados ni condiciones que detecten el entorno de testing).
+- **Nunca** modificar código de producción solo para que un test pase sin implementar correctamente el comportamiento esperado.
 - Si un test falla, se corrige la implementación o, si el test está mal, se corrige el test explicando el motivo.

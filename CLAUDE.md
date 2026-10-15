@@ -85,3 +85,8 @@ int CountActiveWorkers(const std::vector<Worker> &workers)
 
 - **Nunca** modificar código de producción solo para que un test pase sin implementar correctamente el comportamiento esperado.
 - Si un test falla, se corrige la implementación o, si el test está mal, se corrige el test explicando el motivo.
+
+### 6. Explicación de cambios
+
+- Al terminar de implementar un cambio o una funcionalidad nueva, invocar al agente `explicador-concurrencia` ([.claude/agents/explicador-concurrencia.md](.claude/agents/explicador-concurrencia.md)).
+- Genera o actualiza `TP-Integrador/docs/explicaciones/<cambio>.md`: una explicación breve del funcionamiento, con foco en procesos, hilos, kernels GPU, sincronización y comunicación.

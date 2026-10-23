@@ -1,5 +1,12 @@
 # Tasks
 
+> **Estado al 2026-10-23 (para quien continúe):** el código de este cambio está commiteado y la suite del backend pasa (217 tests). La implementación se cortó por límite de sesión, así que queda pendiente:
+> - Verificar `start.sh`, `start.ps1` y `.gitignore` (tasks 5.1 a 5.3): están escritos pero nunca se probaron.
+> - Revisar de nuevo 6.1 (README) y 6.2 (prueba de punta a punta): quedaron marcadas, pero el trabajo se interrumpió antes de confirmar su verificación.
+> - Invocar `explicador-concurrencia` para generar `TP-Integrador/docs/explicaciones/agregar-worker-e-interfaz-web.md` y archivar el cambio.
+> - Después siguen `agregar-modo-comparacion` y `agregar-benchmark`, que todavía no se empezaron.
+> - El contrato de API entre frontend y backend está en `TP-Integrador/frontend/src/api/types.ts`. En esta máquina, OpenCL elige la Radeon integrada; con `OPENCL_DEVICE=NVIDIA` usa la RTX.
+
 ## 1. Configuración y dependencias del backend
 
 - [x] 1.1 Agregar `fastapi`, `uvicorn`, `python-multipart` y `python-dotenv` a `backend/requirements.txt` y `httpx` a `backend/requirements-dev.txt`; verificar la instalación en un venv limpio.

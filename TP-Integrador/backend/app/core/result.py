@@ -19,19 +19,27 @@ class Stage(StrEnum):
   COMPOSE = "compose"
   TRANSFER_H2D = "transfer_h2d"
   TRANSFER_D2H = "transfer_d2h"
+  STAGING_H2D = "staging_h2d"
+  STAGING_D2H = "staging_d2h"
 
 
 # Etapas de cómputo que se comparan entre backends, en orden de ejecución.
 COMPARED_STAGES = (Stage.PREPARE_TILES, Stage.TARGET_DESCRIPTORS, Stage.MATCHING, Stage.COMPOSE)
 # Etapas de transferencia, que solo existen en GPU.
 TRANSFER_STAGES = (Stage.TRANSFER_H2D, Stage.TRANSFER_D2H)
+# Copias en el host entre los arrays del trabajo y la memoria de staging (pinned
+# en CUDA, ALLOC_HOST_PTR en OpenCL). Se informan aparte del DMA para que quede a
+# la vista el costo de usar memoria page-locked (design D5 del cambio 2).
+STAGING_STAGES = (Stage.STAGING_H2D, Stage.STAGING_D2H)
+# Mediciones opcionales: solo existen en GPU.
+OPTIONAL_STAGES = (*TRANSFER_STAGES, *STAGING_STAGES)
 
 
 @dataclass(frozen=True)
 class StageTimings:
   """Tiempos de un trabajo en milisegundos.
 
-  ``None`` en una transferencia significa "no aplica".
+  ``None`` en una transferencia o en una copia de staging significa "no aplica".
   """
 
   prepare_tiles_ms: float
@@ -41,17 +49,19 @@ class StageTimings:
   total_ms: float
   transfer_h2d_ms: float | None = None
   transfer_d2h_ms: float | None = None
+  staging_h2d_ms: float | None = None
+  staging_d2h_ms: float | None = None
 
   @classmethod
   def from_elapsed(cls, elapsed_ms: dict[Stage, float], total_ms: float) -> "StageTimings":
     """Arma los tiempos a partir de lo medido por un ``StageTimer``."""
     stages = {f"{stage.value}_ms": elapsed_ms[stage] for stage in COMPARED_STAGES}
-    transfers = {f"{stage.value}_ms": elapsed_ms.get(stage) for stage in TRANSFER_STAGES}
-    return cls(total_ms=total_ms, **stages, **transfers)
+    optional = {f"{stage.value}_ms": elapsed_ms.get(stage) for stage in OPTIONAL_STAGES}
+    return cls(total_ms=total_ms, **stages, **optional)
 
   def stages_sum_ms(self) -> float:
     """Suma de todas las etapas medidas (las que no aplican cuentan cero)."""
-    measured = [getattr(self, f"{stage.value}_ms") for stage in (*COMPARED_STAGES, *TRANSFER_STAGES)]
+    measured = [getattr(self, f"{stage.value}_ms") for stage in (*COMPARED_STAGES, *OPTIONAL_STAGES)]
     return sum(value for value in measured if value is not None)
 
   def to_dict(self) -> dict[str, float | str]:
@@ -71,6 +81,7 @@ class MosaicResult:
     timings: tiempos por etapa y total.
     backend_name: nombre del backend que lo produjo.
     device_name: dispositivo en el que corrió.
+    notes: avisos del trabajo (por ejemplo, "transferencia sin memoria pinned").
   """
 
   image: np.ndarray
@@ -79,3 +90,4 @@ class MosaicResult:
   timings: StageTimings
   backend_name: str
   device_name: str
+  notes: tuple[str, ...] = ()

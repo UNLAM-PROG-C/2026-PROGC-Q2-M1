@@ -41,6 +41,15 @@ class OutOfMemoryError(BackendError):
   """El trabajo no entra en la memoria disponible."""
 
 
+class BackendInitError(BackendError):
+  """El backend no se pudo inicializar; ``reason`` es el motivo corto que se informa."""
+
+  def __init__(self, reason: str, detail: str = "") -> None:
+    """Guarda el motivo corto; el detalle (por ejemplo, un build log) va al mensaje."""
+    super().__init__(f"{reason}: {detail}" if detail else reason)
+    self.reason = reason
+
+
 class MosaicBackend(Protocol):
   """Interfaz que cumple todo backend."""
 
@@ -109,7 +118,7 @@ class BaseBackend(ABC):
       self.warmup()
     job = MosaicJob.create(tiles_src, target_src, params, choice)
     try:
-      return self._execute(job, ProgressReporter(on_progress))
+      return self._execute(job, self._create_progress(on_progress))
     except MemoryError as error:
       raise OutOfMemoryError(f"memoria insuficiente para el trabajo en {self.name}") from error
     finally:
@@ -126,7 +135,7 @@ class BaseBackend(ABC):
     total_ms = elapsed_ms_since(start)
     timings = StageTimings.from_elapsed(timer.elapsed_ms(), total_ms)
     topk_idx, topk_dist = self._collect_topk(job)
-    return MosaicResult(image, topk_idx, topk_dist, timings, self.name, self.device_name)
+    return MosaicResult(image, topk_idx, topk_dist, timings, self.name, self.device_name, tuple(job.notes))
 
   def _compute_steps(self) -> tuple[tuple[Stage, Step], ...]:
     """Etapas de cómputo comparadas, en orden."""
@@ -155,6 +164,10 @@ class BaseBackend(ABC):
   @abstractmethod
   def _create_timer(self) -> StageTimer:
     """Devuelve la estrategia de medición de este backend."""
+
+  def _create_progress(self, on_progress: ProgressCallback | None) -> ProgressReporter:
+    """Devuelve quién reenvía el progreso; en GPU se difiere hasta que el dispositivo avanza."""
+    return ProgressReporter(on_progress)
 
   def _upload(self, job: MosaicJob, timer: StageTimer) -> None:  # noqa: B027 (gancho opcional)
     """Copia las entradas al dispositivo; por defecto no hay transferencias."""

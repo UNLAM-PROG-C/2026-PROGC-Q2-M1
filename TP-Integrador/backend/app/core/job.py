@@ -5,13 +5,16 @@ from typing import Any
 
 import numpy as np
 
-from app.core.constants import CELL_PX, RGB_CHANNELS, TILE_SRC_PX
+from app.core.constants import CELL_PX, MIN_K, RGB_CHANNELS, TILE_SRC_PX
 from app.core.params import InvalidParamsError, MosaicParams
 
 TILES_SRC_SHAPE_TAIL = (TILE_SRC_PX, TILE_SRC_PX, RGB_CHANNELS)
 # Contiguo y escribible: así los backends compilados reciben siempre el mismo
 # tipo de array y no recompilan (un array de solo lectura es otro tipo en Numba).
 ARRAY_REQUIREMENTS = ("C_CONTIGUOUS", "WRITEABLE")
+# Trabajo mínimo de los warmup: dos teselas y una grilla de 1×2 celdas.
+WARMUP_TILES = 2
+WARMUP_COLS = 2
 
 
 def _as_kernel_input(array: np.ndarray, dtype: type) -> np.ndarray:
@@ -53,6 +56,7 @@ class MosaicJob:
 
   ``buffers`` guarda los arrays intermedios del backend (en CPU, arrays de
   NumPy; en GPU, buffers del dispositivo) entre un paso y el siguiente.
+  ``notes`` junta los avisos que terminan en ``MosaicResult.notes``.
   """
 
   tiles_src: np.ndarray
@@ -61,6 +65,7 @@ class MosaicJob:
   choice: np.ndarray
   rows: int
   buffers: dict[str, Any] = field(default_factory=dict)
+  notes: list[str] = field(default_factory=list)
 
   @classmethod
   def create(
@@ -73,6 +78,14 @@ class MosaicJob:
     rows = target.shape[0] // CELL_PX
     checked_choice = _check_choice(np.asarray(choice), rows * params.cols, params.k)
     return cls(tiles, target, params, checked_choice, rows)
+
+  @classmethod
+  def warmup(cls) -> "MosaicJob":
+    """Trabajo mínimo (negro) con los mismos tipos que uno real, para los warmup."""
+    tiles_src = np.zeros((WARMUP_TILES, *TILES_SRC_SHAPE_TAIL), dtype=np.uint8)
+    target_src = np.zeros((CELL_PX, WARMUP_COLS * CELL_PX, RGB_CHANNELS), dtype=np.uint8)
+    params = MosaicParams(cols=WARMUP_COLS, k=MIN_K)
+    return cls.create(tiles_src, target_src, params, np.zeros(WARMUP_COLS, dtype=np.int32))
 
   @property
   def cols(self) -> int:

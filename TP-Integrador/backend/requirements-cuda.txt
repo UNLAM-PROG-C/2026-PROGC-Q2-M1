@@ -1,0 +1,4 @@
+# Backend CUDA (GPU NVIDIA). Requiere el driver NVIDIA y el CUDA Toolkit (nvcc en el PATH);
+# en Windows, además, Visual Studio con las herramientas de C++ (cl.exe, se detecta solo).
+-r requirements.txt
+pycuda>=2024.1

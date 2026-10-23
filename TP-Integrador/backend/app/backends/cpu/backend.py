@@ -12,24 +12,12 @@ import numpy as np
 
 from app.backends.cpu import stages
 from app.core.backend import BaseBackend, StepProgress
-from app.core.constants import (
-  CELL_PX,
-  CPU_DISTANCE_BUDGET_BYTES,
-  DESC_DIM,
-  FLOAT32_BYTES,
-  MIN_K,
-  RGB_CHANNELS,
-  TILE_SRC_PX,
-)
+from app.core.constants import CPU_DISTANCE_BUDGET_BYTES, DESC_DIM, FLOAT32_BYTES, RGB_CHANNELS
 from app.core.job import MosaicJob
-from app.core.params import MosaicParams
 from app.core.timing import PerfCounterTimer, StageTimer
 
 CPU_BACKEND_NAME = "cpu"
 FALLBACK_DEVICE_NAME = "CPU"
-# Trabajo mínimo del warmup: dos teselas y una grilla de 1×2 celdas.
-WARMUP_TILES = 2
-WARMUP_COLS = 2
 
 
 def chunk_cells_for_budget(n_tiles: int, budget_bytes: int) -> int:
@@ -50,10 +38,7 @@ class CpuBackend(BaseBackend):
 
   def _warmup(self) -> None:
     """Compila todas las etapas ejecutando un trabajo mínimo con los mismos tipos."""
-    tiles_src = np.zeros((WARMUP_TILES, TILE_SRC_PX, TILE_SRC_PX, RGB_CHANNELS), dtype=np.uint8)
-    target_src = np.zeros((CELL_PX, WARMUP_COLS * CELL_PX, RGB_CHANNELS), dtype=np.uint8)
-    params = MosaicParams(cols=WARMUP_COLS, k=MIN_K)
-    job = MosaicJob.create(tiles_src, target_src, params, np.zeros(WARMUP_COLS, dtype=np.int32))
+    job = MosaicJob.warmup()
     for _, step in self._compute_steps():
       step(job, lambda fraction: None)
 

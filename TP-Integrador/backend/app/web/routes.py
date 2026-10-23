@@ -3,6 +3,11 @@
 Las rutas solo validan, guardan subidas (por bloques, en el *threadpool* para
 no bloquear el event loop), envían órdenes al worker y sirven archivos tal
 como están en disco.
+
+Las rutas que leen el estado del trabajo (``JobManager.snapshot``) son ``async``:
+corren en el event loop, el mismo hilo que aplica los eventos del worker, así
+que nunca ven un snapshot a medio actualizar. Las rutas ``def`` (que FastAPI
+corre en el *threadpool*) solo leen el almacén de subidas.
 """
 
 from typing import TYPE_CHECKING
@@ -71,7 +76,7 @@ def _register_state_routes(app: FastAPI, context: "AppContext") -> None:
   """``GET /api/state`` y ``WS /ws``."""
 
   @app.get("/api/state")
-  def get_state() -> dict:
+  async def get_state() -> dict:
     return context.state_json()
 
   @app.websocket("/ws")
@@ -160,7 +165,7 @@ def _register_job_routes(app: FastAPI, context: "AppContext") -> None:
     return {"job_id": snapshot.job_id, "backends": list(snapshot.backends)}
 
   @app.get("/api/jobs/{job_id}/{backend}/{kind}")
-  def get_result(job_id: str, backend: str, kind: str) -> FileResponse:
+  async def get_result(job_id: str, backend: str, kind: str) -> FileResponse:
     if kind not in RESULT_KINDS:
       raise HTTPException(HTTP_NOT_FOUND, NOT_FOUND)
     path = context.jobs.result_file(job_id, backend, kind)

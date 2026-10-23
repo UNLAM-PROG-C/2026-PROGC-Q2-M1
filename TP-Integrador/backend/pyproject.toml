@@ -24,3 +24,5 @@ indent-style = "space"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra"
+# requirements-dev.txt usa httpx (lo que pide la spec); Starlette 1.x avisa que prefiere httpx2.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

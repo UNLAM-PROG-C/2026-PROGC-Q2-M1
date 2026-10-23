@@ -1,4 +1,9 @@
-# Dependencias base: alcanzan para el backend CPU secuencial.
+# Dependencias base: alcanzan para el backend CPU secuencial, el worker y el proceso web.
 numpy>=2.0
 numba>=0.61
 pillow>=10.0
+# Proceso web (API HTTP + WebSocket) y configuración desde .env.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+python-dotenv>=1.0

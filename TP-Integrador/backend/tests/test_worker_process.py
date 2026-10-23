@@ -7,7 +7,7 @@ import time
 from PIL import Image
 
 from app.core.params import MosaicParams
-from app.worker.main import WorkerOptions, worker_main
+from app.worker.main import CommandReader, WorkerOptions, _serve, worker_main
 from app.worker.messages import BackendFinished, JobFinished, JobRejected, RunJob, Shutdown, WorkerReady
 from tests.conftest import write_random_images
 
@@ -59,3 +59,31 @@ def test_real_worker_runs_a_job_rejects_a_concurrent_one_and_shuts_down(tmp_path
     process.join(SHUTDOWN_TIMEOUT_S)
   assert process.exitcode == 0
   assert not multiprocessing.active_children()
+
+
+class _RecordingQueue:
+  """Cola de eventos que anota si el worker seguía ocupado al publicar cada evento."""
+
+  def __init__(self, reader: CommandReader) -> None:
+    self.reader, self.busy_when_put = reader, []
+
+  def put(self, event) -> None:
+    self.busy_when_put.append((type(event), self.reader._busy.is_set()))
+
+
+class _InstantRunner:
+  """``JobRunner`` falso: termina enseguida."""
+
+  def execute(self, command: RunJob) -> JobFinished:
+    return JobFinished(command.job_id)
+
+
+def test_worker_is_free_before_publishing_the_final_event(tmp_path):
+  # Un RunJob que llegue apenas después de JobFinished no tiene que ser rechazado.
+  reader = CommandReader(queue.Queue(), None)
+  events = _RecordingQueue(reader)
+  reader._busy.set()
+  reader.accepted.put(make_job(tmp_path, "j1"))
+  reader.accepted.put(Shutdown())
+  _serve(reader, _InstantRunner(), events)
+  assert events.busy_when_put == [(JobFinished, False)]

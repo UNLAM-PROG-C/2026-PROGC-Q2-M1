@@ -106,7 +106,16 @@ class JobRunner:
     self._preview_max_side = preview_max_side
 
   def run(self, command: RunJob) -> None:
-    """Carga, ejecuta cada backend, guarda y publica; un error se informa como ``JobFailed``."""
+    """Ejecuta el trabajo y publica también su evento final."""
+    self._sink.put(self.execute(command))
+
+  def execute(self, command: RunJob) -> JobFinished | JobFailed:
+    """Carga, ejecuta cada backend y guarda; devuelve el evento final sin publicarlo.
+
+    Separar el evento final le permite al worker marcarse libre antes de
+    publicarlo: así un ``RunJob`` que llegue justo después de ``JobFinished``
+    nunca encuentra al worker todavía ocupado.
+    """
     try:
       loaded, params = self._load(command)
       choice = generate_choice(params.seed, params.k, loaded.target.rows * params.cols)
@@ -114,9 +123,8 @@ class JobRunner:
         self._run_backend(command, backend, loaded, params, choice)
     except Exception as error:
       logger.exception("falló el trabajo %s", command.job_id)
-      self._sink.put(JobFailed(command.job_id, readable_reason(error)))
-      return
-    self._sink.put(JobFinished(command.job_id))
+      return JobFailed(command.job_id, readable_reason(error))
+    return JobFinished(command.job_id)
 
   def _load(self, command: RunJob) -> tuple[LoadResult, MosaicParams]:
     """Etapa común de carga; ajusta ``k`` si se descartaron archivos inválidos."""

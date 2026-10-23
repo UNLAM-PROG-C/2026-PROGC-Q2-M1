@@ -111,16 +111,22 @@ class CommandReader:
       self.accepted.put(command)
 
 
-def _serve(reader: CommandReader, runner: JobRunner) -> None:
-  """Hilo de trabajo: ejecuta los trabajos aceptados hasta ``Shutdown``."""
+def _serve(reader: CommandReader, runner: JobRunner, event_q: EventSink) -> None:
+  """Hilo de trabajo: ejecuta los trabajos aceptados hasta ``Shutdown``.
+
+  El worker se marca libre antes de publicar el evento final: el proceso web
+  acepta un trabajo nuevo recién al recibir ese evento, así que el hilo de
+  órdenes nunca lo rechaza por un ``busy`` que quedó atrasado.
+  """
   while True:
     command = reader.accepted.get()
     if isinstance(command, Shutdown):
       return
     try:
-      runner.run(command)
+      final_event = runner.execute(command)
     finally:
       reader.job_done()
+    event_q.put(final_event)
 
 
 def worker_main(command_q, event_q, options: WorkerOptions) -> None:
@@ -136,7 +142,7 @@ def worker_main(command_q, event_q, options: WorkerOptions) -> None:
     event_q.put(WorkerReady(tuple(statuses), registry.preferred_gpu(), calibration))
     reader = CommandReader(command_q, event_q)
     reader.start()
-    _serve(reader, JobRunner(LoadCache(tile_loader), registry, event_q, options.preview_max_side))
+    _serve(reader, JobRunner(LoadCache(tile_loader), registry, event_q, options.preview_max_side), event_q)
   finally:
     tile_loader.close()
     registry.close()

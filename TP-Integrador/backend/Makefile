@@ -7,7 +7,9 @@ else
 PYTHON ?= ../.venv/bin/python
 endif
 
-.PHONY: build test lint format clean
+CLANG_FORMAT ?= clang-format
+
+.PHONY: build test lint lint-kernels format backends clean
 
 # Compila a bytecode todo el paquete (detecta errores de sintaxis).
 build:
@@ -19,6 +21,14 @@ test:
 lint:
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m ruff format --check .
+
+# Verifica el formato de los kernels con el .clang-format de la raíz del repo (Allman).
+lint-kernels:
+	$(CLANG_FORMAT) --dry-run --Werror kernels/mosaic.cu kernels/mosaic.cl
+
+# Diagnóstico: estado de CPU, CUDA y OpenCL, y GPU preferida.
+backends:
+	$(PYTHON) -m app.backends.registry
 
 # Aplica el formato de ruff (2 espacios).
 format:

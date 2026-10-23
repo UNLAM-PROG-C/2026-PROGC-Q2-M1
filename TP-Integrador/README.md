@@ -97,11 +97,28 @@ Es una sola pantalla: arriba, el stepper (en pantallas angostas se compacta a "P
 
 1. **Imágenes.** Se elige el lote de teselas (varias imágenes JPEG, PNG o WebP, o un único `.zip`, que puede tener carpetas) y la imagen objetivo. Cada una se sube apenas se elige, con barra de progreso; se ve el resumen ("200 teselas · 4 archivos ignorados"), una muestra de miniaturas y la miniatura del objetivo. Los archivos que no son imágenes (y los `__MACOSX/._*`) se ignoran; las entradas de zip con rutas peligrosas se rechazan.
 2. **Parámetros.** Columnas de la grilla, resolución de cada tesela (16, 32 o 64 px), opacidad de las teselas (0–100 %, el `alpha` del algoritmo) y semilla; cada uno tiene un "?" con una explicación. Abajo se recalcula la información del problema: N, M (filas × columnas), M·N y el tamaño de la imagen final. Si la imagen final supera el límite, no se puede avanzar. `k` no se muestra: el servidor usa `min(5, N)`.
-3. **Ejecución.** "CPU" o "GPU — <API> (<placa>)": la API (CUDA u OpenCL) la elige el sistema según el hardware; sin GPU la opción aparece deshabilitada con el motivo. Con CPU se muestra el tiempo estimado (calibrado al arrancar el worker) y, si supera el umbral, se pide confirmación.
-4. **Progreso.** Una barra por etapa (carga común, preparación de teselas, descriptores del objetivo, matching + top-k, composición y guardado), en vivo por WebSocket. Si se recarga la página, se recupera el trabajo en curso. Mientras dura, ninguna pestaña puede lanzar otro trabajo.
-5. **Resultado.** El mosaico sobre un bloque oscuro, con zoom (rueda o botones) y arrastre; "Descargar" en PNG o JPEG con la resolución completa; "Ver estadísticas" con la tabla de tiempos por etapa (las transferencias dicen "no aplica" en CPU) y "Volver a empezar", que regresa al paso 1 con el lote y el objetivo ya cargados (y los últimos parámetros): se puede cambiar solo uno de los dos, y si no se toca el lote la carga común se reutiliza ("reutilizada" en las estadísticas).
+3. **Ejecución.** "CPU", "GPU — <API> (<placa>)" o "Ambas (CPU y GPU)": la API (CUDA u OpenCL) la elige el sistema según el hardware; sin GPU, "GPU" y "Ambas" aparecen deshabilitadas con el motivo. Con CPU y con Ambas se muestra el tiempo estimado de la CPU (calibrado al arrancar el worker) y, si supera el umbral, se pide confirmación.
+4. **Progreso.** Una barra por etapa (carga común, preparación de teselas, descriptores del objetivo, matching + top-k, composición y guardado), en vivo por WebSocket; con "Ambas", la carga común y después un grupo de barras por backend (GPU y CPU). Si se recarga la página, se recupera el trabajo en curso. Mientras dura, ninguna pestaña puede lanzar otro trabajo.
+5. **Resultado.** El mosaico sobre un bloque oscuro, con zoom (rueda o botones) y arrastre; "Descargar" en PNG o JPEG con la resolución completa; "Ver estadísticas" con la tabla de tiempos por etapa (las transferencias dicen "no aplica" en CPU; con "Ambas", la vista comparativa descripta abajo) y "Volver a empezar", que regresa al paso 1 con el lote y el objetivo ya cargados (y los últimos parámetros): se puede cambiar solo uno de los dos, y si no se toca el lote la carga común se reutiliza ("reutilizada" en las estadísticas).
 
 Ejemplo real en la máquina de desarrollo (RTX 2080 SUPER, Ryzen), 8.000 teselas, 400 × 300 celdas (960 millones de comparaciones), `tile_px` = 16: CPU 65,97 s en total (matching 64,95 s; estimación previa "~1 min"), GPU (CUDA) 1,19 s con la carga común reutilizada.
+
+### Comparar CPU y GPU ("Ambas")
+
+La opción **"Ambas (CPU y GPU)"** del paso 3 ejecuta el mismo trabajo en la GPU que eligió el sistema (la misma de la opción GPU) y en la CPU. Solo está disponible si hay una GPU; si no, aparece deshabilitada con el motivo y el servidor rechaza el pedido (no lo ejecuta solo en CPU).
+
+- **Condiciones idénticas.** La carga común se hace una sola vez y los dos backends reciben los mismos arrays, los mismos parámetros y la misma tabla `choice`. Corren de a uno, nunca en simultáneo: primero la GPU (el resultado se ve en segundos) y después la CPU.
+- **Resultado.** Los dos mosaicos lado a lado (uno debajo del otro en pantallas angostas), cada uno con su descarga. El zoom y el desplazamiento son compartidos: acercar una zona de uno muestra la misma zona del otro.
+- **Gráfico.** Barras agrupadas (GPU en azul, CPU en gris) para cada etapa, las transferencias de la GPU y el total. Como la GPU puede ser cientos de veces más rápida, el eje arranca en **escala logarítmica** si la barra más alta supera a la más baja más de 100 veces: en esa escala, cada línea es 10 veces la anterior, así que la distancia entre dos barras se lee como "cuántas veces más rápido". El interruptor pasa a escala lineal.
+- **Speedup.** La tabla tiene una columna por backend y una de speedup `tiempo CPU / tiempo GPU` por etapa y para el total. El speedup del **total incluye las transferencias** host↔device (y las copias a staging) de la GPU, por eso es menor que el de matching: es lo que gana de verdad quien usa la GPU. La carga común, las transferencias y la inicialización no tienen speedup ("—").
+- **Verificación.** Apenas termina cada backend, el worker toma una huella del resultado (`topk_idx` y un digest `blake2b` de 8 bytes por celda de la imagen) y libera la imagen; al final compara la de la GPU contra la de la CPU. Arriba de las estadísticas se ve "Resultados idénticos ✓" o, por ejemplo, "CUDA: 8 celdas difieren de CPU (diferencias de punto flotante en casi-empates)": una celda difiere si cambió su top-k o algún píxel de su bloque (ver "Precisión numérica esperada").
+- **Si la GPU falla** (por ejemplo, por memoria), la CPU se ejecuta igual: se muestra "GPU falló: <motivo>", solo el mosaico de la CPU y sus tiempos con el aviso "sin comparación".
+
+Comparar CUDA contra OpenCL sobre la misma placa no se hace desde la interfaz sino con `benchmark.py` (cambio 5).
+
+Ejemplo real (RTX 2080 SUPER, Ryzen), 2.000 teselas, 400 × 300 celdas, `tile_px` = 32, carga común reutilizada: matching 16.277,9 ms en CPU contra 91,7 ms en CUDA (177×), total 17.579,5 ms contra 550,6 ms (32×), 8 de 120.000 celdas distintas:
+
+![Estadísticas comparativas CPU vs. CUDA](docs/capturas/comparacion-estadisticas.png)
 
 ## Arquitectura de procesos
 
@@ -121,9 +138,10 @@ start.sh / start.ps1
 - Por las colas viajan solo dataclasses chicas (`app/worker/messages.py`): ids, rutas, parámetros, progreso, tiempos. Nunca arrays: el worker guarda PNG, JPEG y la vista previa en `MOSAIC_TEMP_DIR/jobs/<id>/<backend>/` (fuera de la medición) y el proceso web los sirve por ruta.
 - Todos los procesos hijos se crean con `spawn` (CUDA no sobrevive a un `fork`), por eso `app/main.py` arranca uvicorn dentro de `if __name__ == "__main__":`.
 - Ctrl+C llega a todo el grupo de procesos (también en Windows): el worker y su pool ignoran `SIGINT`/`SIGBREAK` y solo terminan con la orden `Shutdown` (o con `terminate()` pasado el tiempo límite).
+- En una comparación, la falla de un backend viaja como `BackendFailed` y no corta a los demás; la verificación viaja resumida (`ComparisonFinished` con la cantidad de celdas distintas), nunca las imágenes.
 - El backend conserva solo el último trabajo: si una pestaña muestra un resultado y otra lanza un trabajo nuevo, la primera avisa que ese resultado ya no está disponible.
 
-API del proceso web: `GET /api/state`, `POST /api/tiles` (multipart `files` o `zip`), `GET /api/tiles/{id}`, `GET /api/tiles/{id}/samples/{i}`, `POST /api/targets` (multipart `file`), `GET /api/targets/{id}/image`, `POST /api/jobs` (JSON; 409 si hay un trabajo en curso), `GET /api/jobs/{id}/{backend}/{preview|png|jpg}` y `WS /ws`. El contrato JSON está en `frontend/src/api/types.ts`.
+API del proceso web: `GET /api/state`, `POST /api/tiles` (multipart `files` o `zip`), `GET /api/tiles/{id}`, `GET /api/tiles/{id}/samples/{i}`, `POST /api/targets` (multipart `file`), `GET /api/targets/{id}/image`, `POST /api/jobs` (JSON con `mode` `cpu`, `gpu` o `both`; 409 si hay un trabajo en curso), `GET /api/jobs/{id}/{backend}/{preview|png|jpg}` y `WS /ws`. El contrato JSON está en `frontend/src/api/types.ts`.
 
 ## Estructura
 
@@ -148,7 +166,7 @@ TP-Integrador/
 │   │   ├── config.py       # variables MOSAIC_* y .env
 │   │   ├── worker/         # proceso worker: mensajes, JobRunner, guardado de resultados
 │   │   ├── web/            # proceso web: API, WebSocket (ProgressHub), subidas, trabajos, WorkerClient
-│   │   ├── core/           # constantes, parámetros, color, contrato de backend, tiempos, choice
+│   │   ├── core/           # constantes, parámetros, color, contrato de backend, tiempos, choice, verificación
 │   │   ├── loading/        # decodificación en pool de procesos, objetivo, cache de la última carga
 │   │   └── backends/
 │   │       ├── cpu/        # backend CPU secuencial (Numba, un hilo, sin SIMD) y su calibración
@@ -386,6 +404,7 @@ En la práctica, en la máquina de desarrollo, CUDA y OpenCL coinciden con CPU e
 | Command | `RunJob` y `Shutdown` en `app/worker/messages.py` | Cada orden es un objeto autocontenido y serializable: el worker la ejecuta sin conocer al proceso web, y `RunJob` ya lleva una lista de backends para que el modo comparación no cambie el protocolo. |
 | Observer (eventos) | `ProgressHub` (`app/web/hub.py`); `api/socket.ts` + `useServerState` en el frontend | Cada evento del worker se retransmite a todas las pestañas conectadas; una pestaña nueva recibe primero el estado completo y después los eventos. El frontend se suscribe al WebSocket y aplica cada evento sobre su snapshot. |
 | Facade | `WorkerClient` (`app/web/worker_client.py`); `api/client.ts` | El resto del proceso web solo ve `start`/`send`/`stop`: proceso, colas, hilos, monitor y relanzamiento quedan ocultos. Del lado del frontend, ningún componente arma URLs ni maneja fetch/XHR. |
+| Observer (zoom) | `result/zoomController.ts` | Los dos visores de una comparación se suscriben al mismo `ZoomController` (vía `useSyncExternalStore`): un cambio de zoom o desplazamiento en uno se aplica a los dos, sin que los visores se conozcan entre sí. |
 | State | `wizard/wizardReducer.ts` | El stepper es una máquina de estados (`images → params → execution → running → result`) con todas las transiciones en un reducer puro, testeado sin DOM. |
 
 No se usa Singleton: el único recurso global (el contexto de GPU) lo crea explícitamente el backend CUDA (`make_context`, sin `pycuda.autoinit`) en el proceso que lo usa, lo activa solo durante cada operación y lo libera en `close()`; el registro cierra todos los backends al terminar. Ese proceso es el worker: el proceso web nunca importa PyCUDA ni PyOpenCL.

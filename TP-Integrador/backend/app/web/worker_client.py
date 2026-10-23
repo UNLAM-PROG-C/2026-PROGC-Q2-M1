@@ -13,6 +13,11 @@ recibe los eventos por un callback; ``WorkerClient`` encapsula:
 - el apagado ordenado: ``Shutdown``, ``join(timeout)`` y, si no alcanzó,
   ``terminate()``.
 
+El monitor relanza y ``stop()`` marca el apagado bajo el mismo lock de ciclo de
+vida: si el worker muere justo mientras se apaga la aplicación, o el monitor
+relanza antes y ``stop()`` apaga al worker nuevo, o ``stop()`` marca antes y el
+monitor ya no relanza. Nunca queda un worker que nadie detiene.
+
 El callback se llama desde los hilos del cliente: quien lo registra tiene que
 pasar el evento a su propio hilo (el proceso web usa ``call_soon_threadsafe``).
 """
@@ -75,6 +80,7 @@ class WorkerClient:
     self._on_event, self._options, self._timeout, self._target = on_event, options, shutdown_timeout_s, target
     self._context = multiprocessing.get_context(START_METHOD)
     self._lock = threading.Lock()
+    self._lifecycle_lock = threading.Lock()
     self._stopping = threading.Event()
     self._current: _Generation | None = None
     self._monitor: threading.Thread | None = None
@@ -102,8 +108,9 @@ class WorkerClient:
 
   def stop(self) -> None:
     """Apagado ordenado; pasado el tiempo límite termina el proceso a la fuerza."""
-    self._stopping.set()
-    current = self._current
+    with self._lifecycle_lock:
+      self._stopping.set()
+      current = self._current
     if current is None:
       return
     if current.process.is_alive():
@@ -145,12 +152,15 @@ class WorkerClient:
     """Monitor: si el worker muere sin que se lo pidan, avisa y lo relanza."""
     while not self._stopping.is_set():
       current = self._current
-      if not wait([current.process.sentinel], POLL_INTERVAL_S) or self._stopping.is_set():
+      if not wait([current.process.sentinel], POLL_INTERVAL_S):
         continue
-      logger.error("el worker terminó inesperadamente (código %s): se relanza", current.process.exitcode)
-      self._retire(current)
-      self._on_event(WorkerCrashed(current.process.exitcode))
-      self._launch()
+      with self._lifecycle_lock:
+        if self._stopping.is_set():
+          return
+        logger.error("el worker terminó inesperadamente (código %s): se relanza", current.process.exitcode)
+        self._retire(current)
+        self._on_event(WorkerCrashed(current.process.exitcode))
+        self._launch()
 
   @staticmethod
   def _retire(generation: _Generation) -> None:

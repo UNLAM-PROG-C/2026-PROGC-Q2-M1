@@ -13,6 +13,7 @@ Se usa siempre el contexto ``spawn`` (design D7).
 
 import multiprocessing
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing import shared_memory
 from pathlib import Path
@@ -60,9 +61,14 @@ def default_workers() -> int:
 class TileLoader:
   """Decodifica lotes de teselas; el pool se crea una vez y se reutiliza."""
 
-  def __init__(self, workers: int | None = None) -> None:
-    """Configura la cantidad de procesos; el pool se crea en la primera carga."""
+  def __init__(self, workers: int | None = None, initializer: Callable[[], None] | None = None) -> None:
+    """Configura la cantidad de procesos; el pool se crea con ``start()`` o en la primera carga.
+
+    ``initializer`` corre en cada proceso del pool al arrancar (el worker lo usa
+    para que los procesos del pool ignoren Ctrl+C).
+    """
     self.workers = workers or default_workers()
+    self._initializer = initializer
     self._pool = None
 
   def __enter__(self) -> "TileLoader":
@@ -72,6 +78,10 @@ class TileLoader:
   def __exit__(self, *exc_info: object) -> None:
     """Cierra el pool al salir del ``with``."""
     self.close()
+
+  def start(self) -> None:
+    """Crea el pool ya, en lugar de esperar a la primera carga."""
+    self._ensure_pool()
 
   def close(self) -> None:
     """Termina los procesos del pool."""
@@ -92,7 +102,7 @@ class TileLoader:
   def _ensure_pool(self):
     """Crea el pool ``spawn`` si todavía no existe."""
     if self._pool is None:
-      self._pool = multiprocessing.get_context(START_METHOD).Pool(self.workers)
+      self._pool = multiprocessing.get_context(START_METHOD).Pool(self.workers, self._initializer)
     return self._pool
 
   def _decode_all(self, paths: list[str]) -> tuple[np.ndarray, dict[int, str]]:

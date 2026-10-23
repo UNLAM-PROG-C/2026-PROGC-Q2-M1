@@ -11,7 +11,7 @@ Es el **cambio 2 de 5**. Depende del cambio 1 (contrato de backend y definición
 - Kernels propios en `kernels/mosaic.cu` (CUDA C) y `kernels/mosaic.cl` (OpenCL C): `resize_tiles`, `tile_descriptors`, `cell_descriptors`, `sq_norms`, `distances_tiled`, `topk_rows`, `compose`, comentados con el mapeo hilo → dato.
 - Backend CUDA con PyCUDA: contexto explícito (sin `pycuda.autoinit`), memoria *pinned*, un único stream, tiempos con `pycuda.driver.Event`, transferencias medidas aparte y tamaño de bloque del matching según la memoria libre.
 - Backend OpenCL con PyOpenCL: prioridad a dispositivos AMD, buffers `ALLOC_HOST_PTR`, una única command queue con `PROFILING_ENABLE`, tiempos por eventos de profiling.
-- Detección de backends disponibles y selección: estado de cada backend con nombre del dispositivo o motivo de indisponibilidad, modo "Automático" (CUDA > OpenCL > CPU), y respeto estricto de la elección del usuario.
+- Detección de backends disponibles y selección: estado de cada backend con nombre del dispositivo o motivo de indisponibilidad, GPU preferida según la placa (CUDA con NVIDIA, si no OpenCL) para la opción "GPU" de la interfaz, y respeto estricto del backend pedido.
 - Tests de equivalencia: los tres backends producen resultados equivalentes, con tolerancia de punto flotante, sobre conjuntos sintéticos (se saltean los backends no disponibles).
 
 ## Capabilities
@@ -27,6 +27,6 @@ Es el **cambio 2 de 5**. Depende del cambio 1 (contrato de backend y definición
 
 ## Impact
 
-- Código nuevo en `TP-Integrador/kernels/`, `app/backends/cuda/`, `app/backends/opencl/`, `app/backends/registry.py` y tests.
-- Dependencias opcionales: `pycuda` (requiere CUDA Toolkit) en `requirements-cuda.txt` y `pyopencl` en `requirements-opencl.txt`. Sin ellas la aplicación sigue funcionando solo con CPU.
+- Código nuevo en `TP-Integrador/backend/kernels/`, `backend/app/backends/cuda/`, `backend/app/backends/opencl/`, `backend/app/backends/registry.py` y tests.
+- Dependencias opcionales: `pycuda` (requiere CUDA Toolkit) en `backend/requirements-cuda.txt` y `pyopencl` en `backend/requirements-opencl.txt`. Sin ellas la aplicación sigue funcionando solo con CPU. El script de arranque del cambio 3 elige cuál instalar según la placa.
 - README: instalación para NVIDIA (CUDA Toolkit) y AMD (drivers OpenCL/ROCm), y cómo correr los tests de equivalencia.

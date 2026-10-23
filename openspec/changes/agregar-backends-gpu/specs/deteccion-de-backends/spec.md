@@ -31,20 +31,28 @@ Si un backend GPU falla al inicializarse o al precalentarse (driver, contexto o 
 - **WHEN** el compilador OpenCL del driver rechaza `mosaic.cl`
 - **THEN** OpenCL queda "no disponible: error de compilación de kernels", el log tiene el build log completo y CUDA y CPU siguen disponibles
 
-### Requirement: Selección respetando al usuario
-Si el usuario elige un backend, el trabajo MUST ejecutarse con ese backend, aunque haya otro más rápido disponible. Si elige un backend no disponible, el trabajo MUST rechazarse indicando el motivo, sin sustituirlo por otro.
+### Requirement: Selección respetando lo pedido
+Si se pide un backend (por nombre, como hace el benchmark, o como resultado de la forma de ejecución elegida en la interfaz), el trabajo MUST ejecutarse con ese backend, aunque haya otro más rápido disponible. Si se pide un backend no disponible, el trabajo MUST rechazarse indicando el motivo, sin sustituirlo por otro.
 
 #### Scenario: CPU elegida con GPU disponible
-- **WHEN** CUDA está disponible y el usuario elige CPU secuencial
+- **WHEN** CUDA está disponible y se pide CPU secuencial
 - **THEN** el trabajo se ejecuta con CPU secuencial
 
-#### Scenario: Backend elegido no disponible
-- **WHEN** el usuario elige OpenCL y OpenCL no está disponible
+#### Scenario: Backend pedido no disponible
+- **WHEN** se pide OpenCL y OpenCL no está disponible
 - **THEN** el trabajo se rechaza con el motivo de indisponibilidad de OpenCL
 
-### Requirement: Modo automático
-Si el usuario elige "Automático", el sistema MUST usar el primer backend disponible en el orden CUDA, OpenCL, CPU secuencial, e informar cuál usó.
+### Requirement: Selección automática de la GPU
+El sistema MUST determinar una única GPU preferida para la opción "GPU" de la interfaz, según la placa disponible: CUDA si está disponible (placa NVIDIA), si no OpenCL, si no ninguna. Cuando no hay GPU preferida, MUST informar un motivo que combine los de CUDA y OpenCL. La GPU preferida MUST NOT ser nunca CPU secuencial.
 
-#### Scenario: Solo OpenCL y CPU
-- **WHEN** CUDA no está disponible, OpenCL sí, y el usuario elige "Automático"
-- **THEN** el trabajo se ejecuta con OpenCL y el resultado indica "OpenCL"
+#### Scenario: Placa NVIDIA con CUDA y OpenCL
+- **WHEN** CUDA y OpenCL están disponibles sobre una GeForce RTX 3060
+- **THEN** la GPU preferida es CUDA con dispositivo "GeForce RTX 3060"
+
+#### Scenario: Solo OpenCL
+- **WHEN** CUDA no está disponible y OpenCL sí
+- **THEN** la GPU preferida es OpenCL con el nombre de su dispositivo
+
+#### Scenario: Sin GPU
+- **WHEN** ni CUDA ni OpenCL están disponibles
+- **THEN** no hay GPU preferida y el motivo informado indica que no se detectó una GPU compatible

@@ -8,13 +8,13 @@ Este es el **cambio 1 de 5** de la propuesta inicial del proyecto:
 
 1. `agregar-nucleo-fotomosaico-cpu` (este): carga común, contrato del algoritmo y de los backends, backend CPU secuencial.
 2. `agregar-backends-gpu`: kernels y backends CUDA y OpenCL, detección de backends.
-3. `agregar-worker-e-interfaz-web`: proceso worker, proceso web FastAPI e interfaz para ejecutar con un backend.
-4. `agregar-modo-comparacion`: ejecución del mismo trabajo con varios backends, speedup y verificación.
+3. `agregar-worker-e-interfaz-web`: proceso worker, backend FastAPI, frontend React desacoplado con stepper (CPU o GPU) y script de arranque con venv.
+4. `agregar-modo-comparacion`: ejecución del mismo trabajo en CPU y GPU ("Ambas"), estadísticas comparativas, speedup y verificación.
 5. `agregar-benchmark`: script `benchmark.py` y cierre de la documentación.
 
 ## What Changes
 
-- Se crea el proyecto Python del TP en `TP-Integrador/` (estructura de paquetes, `requirements*.txt`, `env.example`, configuración de linter/tests, `Makefile`, README base). Reemplaza el placeholder `TP-Integrador/file`.
+- Se crea el backend Python del TP en `TP-Integrador/backend/` (estructura de paquetes, `requirements*.txt`, `env.example`, configuración de linter/tests, `Makefile`) y el README base en `TP-Integrador/`. Las dependencias se instalan en el entorno virtual `TP-Integrador/.venv`. La carpeta `TP-Integrador/frontend/` llega en el cambio 3. Reemplaza el placeholder `TP-Integrador/file`.
 - Etapa común de carga: decodificación de teselas en un pool de procesos (EXIF, RGB, recorte cuadrado central, 128×128) sobre un array compartido preasignado, y preparación de la imagen objetivo (`(cols·8)×(rows·8)`). Se mide aparte y se puede reutilizar.
 - Definición formal del algoritmo de fotomosaico (preparación de teselas, descriptores Lab 8×8, distancias, top-k con desempate determinista, selección con semilla, composición con mezcla α), común a los tres backends.
 - Contrato común de backends (`MosaicBackend`, `MosaicParams`, `MosaicResult`, tiempos por etapa, `warmup()` excluido de la medición, callback de progreso).
@@ -34,6 +34,6 @@ Este es el **cambio 1 de 5** de la propuesta inicial del proyecto:
 
 ## Impact
 
-- Código nuevo en `TP-Integrador/` (`app/core`, `app/loading`, `app/backends/cpu`, `tests/`). No toca los TPs anteriores.
+- Código nuevo en `TP-Integrador/backend/` (`app/core`, `app/loading`, `app/backends/cpu`, `tests/`). No toca los TPs anteriores.
 - Dependencias base: `numpy`, `numba`, `pillow`; de desarrollo: `pytest`, `ruff`.
 - Las decisiones numéricas de este cambio condicionan los kernels CUDA/OpenCL del cambio 2: cualquier ajuste posterior al algoritmo debe hacerse en las tres implementaciones a la vez.

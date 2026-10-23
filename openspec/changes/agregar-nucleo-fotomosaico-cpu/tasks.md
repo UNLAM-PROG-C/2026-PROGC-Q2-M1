@@ -2,10 +2,10 @@
 
 ## 1. Estructura del proyecto
 
-- [ ] 1.1 Crear `TP-Integrador/` con los paquetes `app/core`, `app/loading`, `app/backends/cpu` y `tests/` según design D2, y borrar el placeholder `TP-Integrador/file`; verificar con `python -c "import app.core, app.loading, app.backends.cpu"` desde `TP-Integrador/`.
-- [ ] 1.2 Agregar `requirements.txt` (numpy, numba, pillow) y `requirements-dev.txt` (pytest, ruff); verificar que `pip install -r requirements-dev.txt -r requirements.txt` termina sin errores en un venv limpio.
-- [ ] 1.3 Agregar `pyproject.toml` con ruff (`indent-width = 2`) y pytest, `.gitignore` local (`.env`, `__pycache__`, `.venv`, temporales) y `env.example` con `NUMBA_LOOP_VECTORIZE=0` y `NUMBA_SLP_VECTORIZE=0`; verificar que `ruff check .` y `ruff format --check .` pasan sobre el esqueleto.
-- [ ] 1.4 Agregar `Makefile` con `build` (compileall), `test`, `lint` y `clean`, con equivalentes sin `make` en el README; verificar que `make build test` corre (aunque todavía no haya tests).
+- [ ] 1.1 Crear `TP-Integrador/backend/` con los paquetes `app/core`, `app/loading`, `app/backends/cpu` y `tests/` según design D2, y borrar el placeholder `TP-Integrador/file`; verificar con `python -c "import app.core, app.loading, app.backends.cpu"` desde `TP-Integrador/backend/`.
+- [ ] 1.2 Agregar `backend/requirements.txt` (numpy, numba, pillow) y `backend/requirements-dev.txt` (pytest, ruff); verificar que `pip install -r requirements-dev.txt -r requirements.txt` termina sin errores en un venv limpio creado en `TP-Integrador/.venv`.
+- [ ] 1.3 Agregar `backend/pyproject.toml` con ruff (`indent-width = 2`) y pytest, `.gitignore` en `TP-Integrador/` (`.env`, `__pycache__`, `.venv`, temporales) y `backend/env.example` con `NUMBA_LOOP_VECTORIZE=0` y `NUMBA_SLP_VECTORIZE=0`; verificar que `ruff check .` y `ruff format --check .` pasan sobre el esqueleto.
+- [ ] 1.4 Agregar `backend/Makefile` con `build` (compileall), `test`, `lint` y `clean`, con equivalentes sin `make` en el README; verificar que `make build test` corre (aunque todavía no haya tests).
 
 ## 2. Núcleo: constantes, parámetros, color y contrato
 
@@ -34,7 +34,7 @@
 
 ## 5. Documentación
 
-- [ ] 5.1 Escribir el README base de `TP-Integrador/` (objetivo didáctico, instalación solo CPU, cómo correr los tests, algoritmo y la precisión numérica esperada (design D3), patrones de design D6); verificar que los comandos del README funcionan copiados tal cual en un venv limpio.
+- [ ] 5.1 Escribir el README base de `TP-Integrador/` (objetivo didáctico, estructura `backend/` + `frontend/`, instalación solo CPU en `TP-Integrador/.venv`, cómo correr los tests, algoritmo y la precisión numérica esperada (design D3), patrones de design D6); verificar que los comandos del README funcionan copiados tal cual en un venv limpio.
 
 ## Workflow follow-up
 

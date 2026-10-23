@@ -2,7 +2,7 @@
 
 ## Context
 
-- El registro de backends (`agregar-backends-gpu`), la verificación (`agregar-modo-comparacion`, `app/core/verification.py`) y la calibración de CPU (`agregar-worker-e-interfaz-web`, D7) ya existen. El benchmark los usa directamente, sin worker ni web.
+- El registro de backends (`agregar-backends-gpu`), la verificación (`agregar-modo-comparacion`, `app/core/verification.py`) y la calibración de CPU (`agregar-worker-e-interfaz-web`, D8) ya existen. El benchmark los usa directamente, sin worker ni web.
 - La etapa común de carga no se compara, así que el benchmark genera `tiles_src` y `target_src` sintéticos directamente en memoria, sin decodificar archivos.
 
 ## Goals / Non-Goals
@@ -13,6 +13,7 @@
 
 **Non-Goals:**
 - Medir la etapa común de carga o la interfaz.
+- Elegir la GPU automáticamente: a diferencia de la interfaz, el benchmark mide CUDA y OpenCL por separado (en una placa NVIDIA, sobre el mismo dispositivo) para poder compararlos.
 - Perfilar kernels individuales (para eso están Nsight / `rocprof`).
 
 ## Decisions

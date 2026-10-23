@@ -26,7 +26,7 @@
 
 ## 5. Detección, selección y equivalencia
 
-- [ ] 5.1 Implementar `app/backends/registry.py` (`BackendStatus`, fábricas con import diferido, `detect_and_warmup()`, `resolve()`); verificar con tests de fábricas falsas: sin bibliotecas, CUDA sin dispositivos, falla de compilación OpenCL aislada con log completo, CPU elegida con GPU disponible, backend elegido no disponible rechazado y "Automático" → OpenCL cuando falta CUDA.
+- [ ] 5.1 Implementar `app/backends/registry.py` (`BackendStatus`, fábricas con import diferido, `detect_and_warmup()`, `resolve()`, `preferred_gpu()`); verificar con tests de fábricas falsas: sin bibliotecas, CUDA sin dispositivos, falla de compilación OpenCL aislada con log completo, CPU pedida con GPU disponible, backend pedido no disponible rechazado, GPU preferida CUDA con CUDA y OpenCL disponibles, OpenCL cuando falta CUDA y ninguna (con motivo) sin GPU.
 - [ ] 5.2 Pasar `tests/test_backend_equivalence.py` a parametrizar con los backends que detecta el registro; verificar que pasa en la máquina de desarrollo (CPU + OpenCL) y en una máquina NVIDIA (CPU + CUDA + OpenCL), y registrar en el PR en qué hardware se corrió.
 - [ ] 5.3 Agregar un script de diagnóstico `python -m app.backends.registry` que imprime el estado de todos los backends; verificar que en macOS muestra "CUDA: no disponible (biblioteca no instalada)" y la GPU de Apple para OpenCL.
 

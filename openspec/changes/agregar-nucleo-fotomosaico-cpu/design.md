@@ -30,58 +30,63 @@ Ver la hoja de ruta en `proposal.md`. Cada cambio **solo agrega** capacidades nu
 ```
 TP-Integrador/
 ├── README.md                  # instalación por plataforma, uso, patrones (crece en cada cambio)
-├── Makefile                   # build / run / test / bench / clean, como en los TPs anteriores
-├── pyproject.toml             # configuración de ruff (indent-width = 2) y pytest
-├── requirements.txt           # base: numpy, numba, pillow (+ fastapi, uvicorn en el cambio 3)
-├── requirements-cuda.txt      # -r requirements.txt + pycuda              (cambio 2)
-├── requirements-opencl.txt    # -r requirements.txt + pyopencl            (cambio 2)
-├── requirements-dev.txt       # pytest, ruff (+ httpx, matplotlib más adelante)
-├── env.example                # plantilla de variables de entorno, sin secretos
-├── benchmark.py               #                                           (cambio 5)
-├── kernels/
-│   ├── mosaic.cu              #                                           (cambio 2)
-│   └── mosaic.cl              #                                           (cambio 2)
-├── static/                    # index.html, app.js, styles.css, vendor/   (cambios 3 y 4)
-├── app/
-│   ├── core/
-│   │   ├── constants.py       # única fuente de verdad de constantes (128, 8, 192, 16, 256...)
-│   │   ├── params.py          # MosaicParams, validación, derivación de rows
-│   │   ├── result.py          # MosaicResult, StageTimings
-│   │   ├── backend.py         # Protocol MosaicBackend + BaseBackend (Template Method)
-│   │   ├── timing.py          # StageTimer (Strategy) + PerfCounterTimer
-│   │   ├── color.py           # matriz sRGB→XYZ, blanco D65, constantes Lab, referencia float64
-│   │   ├── choice.py          # generación de choice con semilla
-│   │   └── verification.py    # digests por celda y comparación          (cambio 4)
-│   ├── loading/
-│   │   ├── decode.py          # funciones que corren dentro del pool (EXIF, recorte, resize)
-│   │   ├── tile_loader.py     # pool spawn + SharedMemory + orden determinista
-│   │   ├── target_loader.py   # objetivo + derivación de grilla
-│   │   └── cache.py           # reutilización de la última carga
-│   ├── backends/
-│   │   ├── registry.py        # Factory + detección                       (cambio 2)
-│   │   ├── kernel_build.py    # -D compartidos para .cu y .cl             (cambio 2)
-│   │   ├── cpu/
-│   │   │   ├── __init__.py    # desactiva la vectorización de Numba antes de importarlo
-│   │   │   ├── stages.py      # funciones @njit, una por kernel
-│   │   │   ├── backend.py     # CpuBackend
-│   │   │   └── calibration.py # costos unitarios para estimar duración    (cambio 3)
-│   │   ├── cuda/              # backend.py, timing.py                     (cambio 2)
-│   │   └── opencl/            # backend.py, timing.py, device.py          (cambio 2)
-│   ├── worker/                # messages.py, runner.py, process.py        (cambio 3)
-│   ├── web/                   # server.py, routes.py, uploads.py, hub.py  (cambio 3)
-│   ├── bench/                 # defaults.py, synthetic.py, report.py      (cambio 5)
-│   ├── config.py              # variables de entorno                      (cambio 3)
-│   └── main.py                # arranque de uvicorn                       (cambio 3)
-└── tests/
-    ├── conftest.py            # fábricas de lotes sintéticos con semilla
-    ├── test_color.py
-    ├── test_params.py
-    ├── test_loading.py
-    ├── test_algorithm_rules.py
-    └── test_cpu_backend.py
+├── start.sh / start.ps1       # venv + instalación de lo que falte + arranque de back y front (cambio 3)
+├── .venv/                     # entorno virtual del proyecto (no se versiona)
+├── backend/
+│   ├── Makefile               # build / run / test / lint / bench / clean, como en los TPs anteriores
+│   ├── pyproject.toml         # configuración de ruff (indent-width = 2) y pytest
+│   ├── requirements.txt       # base: numpy, numba, pillow (+ fastapi, uvicorn en el cambio 3)
+│   ├── requirements-cuda.txt  # -r requirements.txt + pycuda              (cambio 2)
+│   ├── requirements-opencl.txt # -r requirements.txt + pyopencl            (cambio 2)
+│   ├── requirements-dev.txt   # pytest, ruff (+ httpx, matplotlib más adelante)
+│   ├── env.example            # plantilla de variables de entorno, sin secretos
+│   ├── benchmark.py           #                                           (cambio 5)
+│   ├── kernels/
+│   │   ├── mosaic.cu          #                                           (cambio 2)
+│   │   └── mosaic.cl          #                                           (cambio 2)
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── constants.py   # única fuente de verdad de constantes (128, 8, 192, 16, 256...)
+│   │   │   ├── params.py      # MosaicParams, validación, derivación de rows
+│   │   │   ├── result.py      # MosaicResult, StageTimings
+│   │   │   ├── backend.py     # Protocol MosaicBackend + BaseBackend (Template Method)
+│   │   │   ├── timing.py      # StageTimer (Strategy) + PerfCounterTimer
+│   │   │   ├── color.py       # matriz sRGB→XYZ, blanco D65, constantes Lab, referencia float64
+│   │   │   ├── choice.py      # generación de choice con semilla
+│   │   │   └── verification.py # digests por celda y comparación          (cambio 4)
+│   │   ├── loading/
+│   │   │   ├── decode.py      # funciones que corren dentro del pool (EXIF, recorte, resize)
+│   │   │   ├── tile_loader.py # pool spawn + SharedMemory + orden determinista
+│   │   │   ├── target_loader.py # objetivo + derivación de grilla
+│   │   │   └── cache.py       # reutilización de la última carga
+│   │   ├── backends/
+│   │   │   ├── registry.py    # Factory + detección + GPU preferida      (cambio 2)
+│   │   │   ├── kernel_build.py # -D compartidos para .cu y .cl             (cambio 2)
+│   │   │   ├── cpu/
+│   │   │   │   ├── __init__.py    # desactiva la vectorización de Numba antes de importarlo
+│   │   │   │   ├── stages.py      # funciones @njit, una por kernel
+│   │   │   │   ├── backend.py     # CpuBackend
+│   │   │   │   └── calibration.py # costos unitarios para estimar duración (cambio 3)
+│   │   │   ├── cuda/          # backend.py, timing.py                     (cambio 2)
+│   │   │   └── opencl/        # backend.py, timing.py, device.py          (cambio 2)
+│   │   ├── worker/            # messages.py, runner.py, process.py        (cambio 3)
+│   │   ├── web/               # server.py, routes.py, uploads.py, hub.py  (cambio 3)
+│   │   ├── bench/             # defaults.py, synthetic.py, report.py      (cambio 5)
+│   │   ├── config.py          # variables de entorno                      (cambio 3)
+│   │   └── main.py            # arranque de uvicorn                       (cambio 3)
+│   └── tests/
+│       ├── conftest.py        # fábricas de lotes sintéticos con semilla
+│       ├── test_color.py
+│       ├── test_params.py
+│       ├── test_loading.py
+│       ├── test_algorithm_rules.py
+│       └── test_cpu_backend.py
+└── frontend/                  # React + Vite + TypeScript, package.json, env.example, src/ (cambios 3 y 4)
 ```
 
-Se agregan `app/core` y `app/loading` a la estructura pedida (`app/web`, `app/worker`, `app/backends/*`), porque el contrato y la carga no pertenecen a ningún backend ni al worker.
+Backend y frontend quedan desacoplados: cada uno tiene su carpeta, sus dependencias, sus tests y su `env.example`, y se comunican solo por HTTP y WebSocket (cambio 3). Este cambio crea solo `backend/`.
+
+Se agregan `app/core` y `app/loading` a la estructura pedida del backend (`app/web`, `app/worker`, `app/backends/*`), porque el contrato y la carga no pertenecen a ningún backend ni al worker.
 
 ### D3. Precisión numérica: se aceptan diferencias pequeñas
 
@@ -129,6 +134,8 @@ Se sigue `CLAUDE.md` (2 espacios), aunque los TPs anteriores en Python usan 4: l
 ### D9. Dependencias
 
 `requirements.txt` no puede expresar dependencias opcionales, así que se separan en `requirements-cuda.txt` y `requirements-opencl.txt` (cada uno incluye el base). Alternativa descartada: líneas comentadas en un único archivo, que nadie instala por error pero tampoco a propósito.
+
+Todas las dependencias de Python se instalan en un único entorno virtual, `TP-Integrador/.venv`, nunca en el Python del sistema. En este cambio se crea a mano (`python -m venv .venv`, documentado en el README); el cambio 3 agrega `start.sh`/`start.ps1`, que lo crean e instalan lo que falte automáticamente.
 
 ## Risks / Trade-offs
 

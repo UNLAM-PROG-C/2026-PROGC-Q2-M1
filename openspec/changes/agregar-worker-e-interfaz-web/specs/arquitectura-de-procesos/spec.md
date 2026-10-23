@@ -2,16 +2,23 @@
 
 ## Purpose
 
-Organiza la aplicación en un proceso web, un proceso worker y un pool de decodificación, de modo que la interfaz siga respondiendo durante el cómputo, los contextos de GPU tengan un único dueño y entre procesos viajen solo datos livianos.
+Organiza la aplicación en un frontend independiente y un backend formado por un proceso web, un proceso worker y un pool de decodificación, de modo que la interfaz siga respondiendo durante el cómputo, los contextos de GPU tengan un único dueño y entre procesos viajen solo datos livianos.
 
 ## ADDED Requirements
 
+### Requirement: Frontend desacoplado del backend
+El frontend MUST ser una aplicación independiente, en su propia carpeta y con su propio servidor, que se comunica con el backend solo por la API HTTP y el WebSocket. El backend MUST NOT servir los archivos de la interfaz ni depender del código del frontend.
+
+#### Scenario: Backend sin frontend
+- **WHEN** se levanta solo el backend
+- **THEN** la API y el WebSocket funcionan y se pueden probar con un cliente HTTP, sin ningún archivo del frontend
+
 ### Requirement: Proceso web sin cómputo pesado
-El proceso web MUST limitarse a recibir y guardar subidas, validar parámetros, enviar órdenes al worker, reenviar eventos al navegador y servir archivos. MUST NOT decodificar el lote, ejecutar backends ni crear contextos de GPU.
+El proceso web del backend MUST limitarse a recibir y guardar subidas, validar parámetros, enviar órdenes al worker, reenviar eventos al navegador y servir resultados y archivos subidos. MUST NOT decodificar imágenes, ejecutar backends ni crear contextos de GPU.
 
 #### Scenario: Interfaz durante un trabajo largo
 - **WHEN** hay un trabajo en CPU en curso
-- **THEN** el servidor web responde a `GET /api/backends` y a la página principal sin demoras atribuibles al trabajo
+- **THEN** el backend responde a `GET /api/state` sin demoras atribuibles al trabajo y la interfaz sigue respondiendo
 
 ### Requirement: Worker dueño de los contextos de GPU
 Un único proceso worker MUST crear, usar y liberar todos los contextos CUDA/OpenCL. Al iniciar MUST detectar y precalentar todos los backends disponibles y publicar su estado antes de aceptar trabajos.
@@ -52,5 +59,5 @@ Si el worker termina inesperadamente, el proceso web MUST detectarlo, marcar el 
 Al detener la aplicación, el proceso web MUST pedir al worker que termine; el worker MUST cerrar el pool, liberar los contextos de GPU y salir dentro de un tiempo límite configurado, pasado el cual se lo termina forzosamente.
 
 #### Scenario: Ctrl+C
-- **WHEN** se detiene uvicorn con Ctrl+C sin trabajos en curso
-- **THEN** el worker libera los contextos y ambos procesos terminan sin dejar procesos huérfanos
+- **WHEN** se detiene la aplicación con Ctrl+C sin trabajos en curso
+- **THEN** el worker libera los contextos y el frontend, el proceso web y el worker terminan sin dejar procesos huérfanos

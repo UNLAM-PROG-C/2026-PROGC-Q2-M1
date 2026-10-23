@@ -10,8 +10,18 @@ from app.backends.cpu.calibration import CpuCalibration
 from app.backends.registry import BackendStatus, GpuPreference
 from app.config import Settings
 from app.core.result import StageTimings
+from app.core.verification import CellDifferences, VerificationSummary
 from app.web.api import create_app
-from app.worker.messages import BackendFinished, JobFinished, JobProgress, RunJob, WorkerCrashed, WorkerReady
+from app.worker.messages import (
+  BackendFailed,
+  BackendFinished,
+  ComparisonFinished,
+  JobFinished,
+  JobProgress,
+  RunJob,
+  WorkerCrashed,
+  WorkerReady,
+)
 
 ORIGIN = "http://127.0.0.1:5173"
 OTHER_ORIGIN = "http://evil.example"
@@ -168,7 +178,7 @@ def test_invalid_params_and_missing_uploads(api):
   client, _ = api
   tiles, target = upload_batch(client), upload_target(client)
   assert client.post("/api/jobs", json=job_body(tiles, target, tile_px=20)).status_code == 400
-  assert client.post("/api/jobs", json=job_body(tiles, target, mode="both")).status_code == 400
+  assert client.post("/api/jobs", json=job_body(tiles, target, mode="ambas")).status_code == 400
   assert client.post("/api/jobs", json=job_body(tiles, {"target_id": "nada"})).status_code == 404
 
 
@@ -247,3 +257,50 @@ def test_results_are_served_and_downloads_are_attachments(api, tmp_path):
   assert png.status_code == 200 and png.headers["content-disposition"].startswith("attachment")
   assert "attachment" not in client.get(f"/api/jobs/{job_id}/cuda/preview").headers.get("content-disposition", "")
   assert client.get(f"/api/jobs/{job_id}/cpu/png").status_code == 404
+
+
+def test_both_is_sent_as_gpu_then_cpu(api):
+  client, worker = api
+  tiles, target = upload_batch(client), upload_target(client)
+  assert client.get("/api/state").json()["execution"]["both"] == {"available": True, "reason": None}
+  response = client.post("/api/jobs", json=job_body(tiles, target, mode="both"))
+  assert response.status_code == 200, response.text
+  assert response.json()["backends"] == ["cuda", "cpu"]
+  assert worker.sent[-1].backends == ("cuda", "cpu")
+
+
+def test_both_without_gpu_is_400_with_reason(api):
+  client, worker = api
+  worker.on_event(WorkerReady((BackendStatus("cpu", True, "Ryzen"),), GpuPreference(None, "sin GPU compatible"), None))
+  tiles, target = upload_batch(client), upload_target(client)
+  response = client.post("/api/jobs", json=job_body(tiles, target, mode="both"))
+  assert response.status_code == 400
+  assert response.json()["detail"] == "sin GPU compatible"
+  assert worker.sent == []
+
+
+def test_comparison_events_are_relayed_and_kept_in_snapshot(api):
+  client, worker = api
+  tiles, target = upload_batch(client), upload_target(client)
+  job_id = client.post("/api/jobs", json=job_body(tiles, target, mode="both")).json()["job_id"]
+  verification = VerificationSummary("cpu", {"cuda": CellDifferences(2, 1, 3)})
+  with client.websocket_connect("/ws") as ws:
+    ws.receive_json()
+    worker.on_event(BackendFailed(job_id, "cuda", "memoria insuficiente en el dispositivo"))
+    worker.on_event(ComparisonFinished(job_id, verification))
+    failed, compared = ws.receive_json(), ws.receive_json()
+  assert failed == {
+    "type": "backend_failed",
+    "job_id": job_id,
+    "backend": "cuda",
+    "reason": "memoria insuficiente en el dispositivo",
+  }
+  expected = {
+    "reference": "cpu",
+    "identical": False,
+    "differences": {"cuda": {"topk_cells": 2, "image_cells": 1, "total_cells": 3}},
+  }
+  assert compared == {"type": "comparison_finished", "job_id": job_id, "verification": expected}
+  job = client.get("/api/state").json()["job"]
+  assert job["failures"] == [{"backend": "cuda", "reason": "memoria insuficiente en el dispositivo"}]
+  assert job["verification"] == expected and job["status"] == "running"

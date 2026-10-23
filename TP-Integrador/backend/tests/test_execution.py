@@ -45,12 +45,32 @@ def test_gpu_with_only_opencl_uses_opencl():
   assert execution_options(ready)["gpu"]["api"] == "OpenCL"
 
 
+def test_both_without_gpu_is_rejected_with_reason():
+  ready = ready_with(CPU, BackendStatus("cuda", False, reason="sin dispositivos CUDA"))
+  with pytest.raises(ExecutionModeError, match="no se detectó una GPU compatible"):
+    backends_for_mode("both", ready)
+  both = execution_options(ready)["both"]
+  assert both["available"] is False and "no se detectó una GPU compatible" in both["reason"]
+
+
+def test_both_with_cuda_runs_cuda_first_then_cpu():
+  ready = ready_with(CPU, BackendStatus("cuda", True, "RTX 3060"), BackendStatus("opencl", True, "Radeon"))
+  assert backends_for_mode("both", ready) == ("cuda", "cpu")
+  assert execution_options(ready)["both"] == {"available": True, "reason": None}
+
+
+def test_both_with_only_opencl_runs_opencl_then_cpu():
+  ready = ready_with(CPU, BackendStatus("opencl", True, "Radeon"))
+  assert backends_for_mode("both", ready) == ("opencl", "cpu")
+
+
 def test_unknown_mode_and_worker_not_ready_are_rejected():
   with pytest.raises(ExecutionModeError, match="desconocida"):
-    backends_for_mode("both", ready_with(CPU))
+    backends_for_mode("ambas", ready_with(CPU))
   with pytest.raises(ExecutionModeError):
     backends_for_mode("cpu", None)
   assert execution_options(None)["cpu"]["available"] is False
+  assert execution_options(None)["both"]["available"] is False
 
 
 def test_small_batch_bounds_k():

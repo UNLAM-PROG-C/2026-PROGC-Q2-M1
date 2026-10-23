@@ -22,11 +22,14 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.params import InvalidParamsError, MosaicParams, derive_rows
 from app.core.result import StageTimings
+from app.core.verification import VerificationSummary
 from app.web.execution import ExecutionModeError, backends_for_mode, effective_k
 from app.web.rules import MAX_SEED
 from app.web.uploads import UploadGoneError, UploadStore
 from app.worker.messages import (
+  BackendFailed,
   BackendFinished,
+  ComparisonFinished,
   JobFailed,
   JobFinished,
   JobProgress,
@@ -83,6 +86,8 @@ class JobSnapshot:
   progress: dict | None = None
   load: dict | None = None
   results: dict[str, BackendFinished] = field(default_factory=dict)
+  failures: dict[str, str] = field(default_factory=dict)
+  verification: dict | None = None
   error: str | None = None
 
   def to_json(self) -> dict:
@@ -99,6 +104,8 @@ class JobSnapshot:
       "progress": self.progress,
       "load": self.load,
       "results": [result_json(result) for result in self.results.values()],
+      "failures": [{"backend": backend, "reason": reason} for backend, reason in self.failures.items()],
+      "verification": self.verification,
       "error": self.error,
     }
 
@@ -118,6 +125,12 @@ def result_json(result: BackendFinished) -> dict:
     "width": result.width,
     "height": result.height,
   }
+
+
+def verification_json(verification: VerificationSummary) -> dict:
+  """``Verification`` del frontend: celdas distintas de cada backend contra la referencia."""
+  differences = {backend: dataclasses.asdict(diff) for backend, diff in verification.differences.items()}
+  return {"reference": verification.reference, "identical": verification.identical, "differences": differences}
 
 
 def load_json(load: LoadFinished) -> dict:
@@ -261,6 +274,8 @@ class JobManager:
     if isinstance(event, BackendFinished):
       job.results[event.backend] = event
       return [{"type": "backend_finished", **base, "result": result_json(event)}]
+    if isinstance(event, BackendFailed | ComparisonFinished):
+      return self._on_comparison_event(job, event)
     if isinstance(event, JobFinished):
       job.status = STATUS_FINISHED
       self._store.release()
@@ -270,3 +285,13 @@ class JobManager:
       self._store.release()
       return [{"type": "job_failed", **base, "reason": event.reason}]
     return []
+
+  @staticmethod
+  def _on_comparison_event(job: JobSnapshot, event: BackendFailed | ComparisonFinished) -> list[dict]:
+    """Falla aislada de un backend o verificación final de una comparación."""
+    base = {"job_id": job.job_id}
+    if isinstance(event, BackendFailed):
+      job.failures[event.backend] = event.reason
+      return [{"type": "backend_failed", **base, "backend": event.backend, "reason": event.reason}]
+    job.verification = verification_json(event.verification)
+    return [{"type": "comparison_finished", **base, "verification": job.verification}]

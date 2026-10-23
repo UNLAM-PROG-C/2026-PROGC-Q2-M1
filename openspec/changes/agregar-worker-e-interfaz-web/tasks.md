@@ -1,12 +1,5 @@
 # Tasks
 
-> **Estado al 2026-10-23 (para quien continúe):** el código de este cambio está commiteado y la suite del backend pasa (217 tests). La implementación se cortó por límite de sesión, así que queda pendiente:
-> - Verificar `start.sh`, `start.ps1` y `.gitignore` (tasks 5.1 a 5.3): están escritos pero nunca se probaron.
-> - Revisar de nuevo 6.1 (README) y 6.2 (prueba de punta a punta): quedaron marcadas, pero el trabajo se interrumpió antes de confirmar su verificación.
-> - Invocar `explicador-concurrencia` para generar `TP-Integrador/docs/explicaciones/agregar-worker-e-interfaz-web.md` y archivar el cambio.
-> - Después siguen `agregar-modo-comparacion` y `agregar-benchmark`, que todavía no se empezaron.
-> - El contrato de API entre frontend y backend está en `TP-Integrador/frontend/src/api/types.ts`. En esta máquina, OpenCL elige la Radeon integrada; con `OPENCL_DEVICE=NVIDIA` usa la RTX.
-
 ## 1. Configuración y dependencias del backend
 
 - [x] 1.1 Agregar `fastapi`, `uvicorn`, `python-multipart` y `python-dotenv` a `backend/requirements.txt` y `httpx` a `backend/requirements-dev.txt`; verificar la instalación en un venv limpio.
@@ -41,14 +34,21 @@
 
 ## 5. Script de arranque
 
-- [ ] 5.1 Implementar `TP-Integrador/start.sh` según design D11 (Python mínimo, venv, huella de dependencias, detección de NVIDIA con caída a OpenCL, `--cpu-only` y `--reinstall`, Node vía `nodeenv` si falta, `npm ci`, `.env` desde `env.example`, arranque de backend y frontend, Ctrl+C que detiene ambos); verificar en macOS desde un clon limpio (primer arranque), con un segundo arranque sin reinstalaciones y con `PATH` sin `node`.
-- [ ] 5.2 Implementar `TP-Integrador/start.ps1` con el mismo comportamiento; verificar en Windows (o en la máquina NVIDIA del grupo) el primer arranque, el segundo sin reinstalaciones y la instalación de PyCUDA o la caída a OpenCL.
-- [ ] 5.3 Agregar `.venv`, `node_modules`, `.env` y los temporales al `.gitignore` de `TP-Integrador/`; verificar con `git status` después de un arranque completo que no aparece nada generado.
+- [x] 5.1 Implementar `TP-Integrador/start.sh` según design D11 (Python mínimo, venv, huella de dependencias, detección de NVIDIA con caída a OpenCL, `--cpu-only` y `--reinstall`, Node vía `nodeenv` si falta, `npm ci`, `.env` desde `env.example`, arranque de backend y frontend, Ctrl+C que detiene ambos); verificar en macOS desde un clon limpio (primer arranque), con un segundo arranque sin reinstalaciones y con `PATH` sin `node`.
+- [x] 5.2 Implementar `TP-Integrador/start.ps1` con el mismo comportamiento; verificar en Windows (o en la máquina NVIDIA del grupo) el primer arranque, el segundo sin reinstalaciones y la instalación de PyCUDA o la caída a OpenCL.
+- [x] 5.3 Agregar `.venv`, `node_modules`, `.env` y los temporales al `.gitignore` de `TP-Integrador/`; verificar con `git status` después de un arranque completo que no aparece nada generado.
 
 ## 6. Documentación e integración
 
 - [x] 6.1 Documentar en el README cómo levantar la aplicación con el script (opciones, qué instala y dónde), cómo levantar backend y frontend por separado, las variables de ambos `env.example`, un recorrido por el stepper y los patrones de design D13; verificar siguiendo el README desde cero en la máquina de desarrollo.
 - [x] 6.2 Prueba de punta a punta: subir un zip de ~200 fotos y un objetivo, ejecutar en CPU y en GPU, y usar "Volver a empezar" para comprobar que las imágenes quedan cargadas y la carga se reutiliza; registrar el resultado (capturas y tiempos) en el PR.
+
+## Verificación (2026-10-23, Windows 11, RTX 2080 SUPER)
+
+- `start.ps1`, primer arranque: detectó NVIDIA e instaló PyCUDA, usó el Node 24 del `PATH`, corrió `npm ci`, creó ambos `.env` y levantó backend y frontend (CPU, CUDA y OpenCL disponibles). Segundo arranque: sin reinstalaciones ("al día" en Python, GPU y npm). Al detener, no quedaron procesos del backend, el worker ni Vite.
+- `git status` limpio después del arranque completo (5.3).
+- `start.sh`: sintaxis (`bash -n`), `--help` y opción desconocida verificados; **queda pendiente la prueba en macOS** (clon limpio, segundo arranque y `PATH` sin `node`) en la máquina de un compañero.
+- Punta a punta por la API: zip de 200 teselas + 1 archivo ignorado, objetivo 640×480, 100 columnas, `tile_px` 32: CPU 190 ms en total, después GPU (CUDA) 69 ms con la carga común reutilizada; vista previa y PNG descargados. Con 8.000 teselas y 400 × 300 celdas: CPU 65,97 s y CUDA 1,19 s (ver README).
 
 ## Workflow follow-up
 

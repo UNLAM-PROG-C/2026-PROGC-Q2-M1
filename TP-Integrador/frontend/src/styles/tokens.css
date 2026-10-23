@@ -1,0 +1,126 @@
+/*
+ * Tokens del design system (DESIGN.md, design D12).
+ * Es el único archivo donde se permiten colores literales: el resto de los
+ * estilos usa estas variables (lo controla stylelint).
+ */
+:root {
+  /* --- Acento (único color interactivo) --- */
+  --color-primary: #0066cc;
+  --color-primary-focus: #0071e3;
+  --color-primary-on-dark: #2997ff;
+  --color-on-primary: #ffffff;
+
+  /* --- Superficies --- */
+  --color-canvas: #ffffff;
+  --color-canvas-parchment: #f5f5f7;
+  --color-canvas-parchment-frosted: rgb(245 245 247 / 80%);
+  --color-surface-pearl: #fafafc;
+  --color-surface-tile-1: #272729;
+  --color-surface-tile-2: #2a2a2c;
+  --color-surface-tile-3: #252527;
+  --color-surface-black: #000000;
+  --color-surface-chip-translucent: rgb(210 210 215 / 64%);
+
+  /* --- Texto --- */
+  --color-ink: #1d1d1f;
+  --color-body: #1d1d1f;
+  --color-body-on-dark: #ffffff;
+  --color-body-muted: #cccccc;
+  --color-ink-muted-80: #333333;
+  --color-ink-muted-48: #7a7a7a;
+
+  /* --- Bordes --- */
+  --color-divider-soft: #f0f0f0;
+  --color-hairline: #e0e0e0;
+  --color-hairline-soft: rgb(0 0 0 / 8%);
+
+  /* Brecha de DESIGN.md: único color de error, solo para validación y fallas. */
+  --color-error: #d70015;
+
+  /* --- Sombra de producto: la única del sistema, reservada para el mosaico --- */
+  --shadow-product: rgb(0 0 0 / 22%) 3px 5px 30px 0;
+
+  /* --- Tipografía --- */
+  --font-display: system-ui, -apple-system, blinkmacsystemfont, inter, sans-serif;
+  --font-text: system-ui, -apple-system, blinkmacsystemfont, inter, sans-serif;
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+
+  /* display-lg */
+  --type-display-lg-size: 40px;
+  --type-display-lg-line: 1.1;
+  --type-display-lg-tracking: -0.01em;
+
+  /* display-md */
+  --type-display-md-size: 34px;
+  --type-display-md-line: 1.47;
+  --type-display-md-tracking: -0.374px;
+
+  /* lead */
+  --type-lead-size: 28px;
+  --type-lead-line: 1.14;
+  --type-lead-tracking: 0.196px;
+
+  /* tagline */
+  --type-tagline-size: 21px;
+  --type-tagline-line: 1.19;
+  --type-tagline-tracking: 0.231px;
+
+  /* body / body-strong (line-height 1.44 al sustituir con Inter) */
+  --type-body-size: 17px;
+  --type-body-line: 1.44;
+  --type-body-strong-line: 1.24;
+  --type-body-tracking: -0.374px;
+
+  /* caption / caption-strong / button-utility */
+  --type-caption-size: 14px;
+  --type-caption-line: 1.43;
+  --type-caption-strong-line: 1.29;
+  --type-caption-tracking: -0.224px;
+
+  /* fine-print */
+  --type-fine-print-size: 12px;
+  --type-fine-print-line: 1;
+  --type-fine-print-tracking: -0.12px;
+
+  /* --- Espaciado (base 8px) --- */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 17px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --space-section: 80px;
+
+  /* --- Radios --- */
+  --radius-none: 0;
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
+  --radius-pill: 9999px;
+  --radius-full: 50%;
+
+  /* --- Medidas de layout y controles --- */
+  --content-max-width: 980px;
+  --stepper-height: 52px;
+  --touch-target: 44px;
+  --input-height: 44px;
+  --help-icon-size: 16px;
+  --progress-height: 6px;
+  --thumb-size: 72px;
+  --frosted-blur: saturate(180%) blur(20px);
+  --press-scale: 0.95;
+  --focus-ring-width: 2px;
+  --selected-border-width: 2px;
+  --hairline-width: 1px;
+  --transition-fast: 120ms;
+  --viewer-height: 70vh;
+  --tooltip-max-width: 280px;
+  --z-stepper: 10;
+  --z-tooltip: 20;
+  --stage-label-width: 14em;
+  --thumb-large-max-height: 216px;
+}

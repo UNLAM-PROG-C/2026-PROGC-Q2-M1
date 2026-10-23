@@ -1,0 +1,135 @@
+/* Resultado: el mosaico sobre product-tile-dark de borde a borde con la única
+   sombra del sistema, y las estadísticas en tablas con números tabulares. */
+
+.product-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-section) var(--space-lg);
+  background: var(--color-surface-tile-1);
+  color: var(--color-body-on-dark);
+  text-align: center;
+}
+
+.product-tile__title {
+  font-size: var(--type-display-lg-size);
+  line-height: var(--type-display-lg-line);
+  letter-spacing: var(--type-display-lg-tracking);
+}
+
+.product-tile__lead {
+  color: var(--color-body-muted);
+  font-size: var(--type-caption-size);
+}
+
+.mosaic-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.mosaic-viewer__stage {
+  width: 100%;
+  height: var(--viewer-height);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.mosaic-viewer__stage:active {
+  cursor: grabbing;
+}
+
+/* La única sombra del sistema (sombra de producto) va sobre el mosaico. */
+.mosaic-viewer__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+  filter: drop-shadow(var(--shadow-product));
+  user-select: none;
+}
+
+.mosaic-viewer__controls {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.icon-button {
+  min-width: var(--touch-target);
+  height: var(--touch-target);
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-chip-translucent);
+  color: var(--color-ink);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.download-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.download-menu__options {
+  display: flex;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.download-menu__options[hidden] {
+  display: none;
+}
+
+.product-tile .text-link {
+  color: var(--color-primary-on-dark);
+}
+
+.timings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  letter-spacing: var(--type-caption-tracking);
+}
+
+.timings-table__caption {
+  padding-bottom: var(--space-xs);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+}
+
+.timings-table th,
+.timings-table td {
+  padding: var(--space-xs) 0;
+  border-bottom: var(--hairline-width) solid var(--color-hairline);
+  font-weight: var(--weight-regular);
+  text-align: left;
+}
+
+.timings-table td {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.timings-table thead th {
+  color: var(--color-ink-muted-48);
+}
+
+.timings-table thead th:last-child {
+  text-align: right;
+}

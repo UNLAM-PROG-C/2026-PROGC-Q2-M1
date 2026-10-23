@@ -15,6 +15,11 @@ Estructura en el directorio temporal::
 - Retención: el último lote, el último objetivo, los que use un trabajo en curso
   y los resultados del último trabajo. Lo demás se borra al recibir una subida
   nueva o al empezar un trabajo.
+- Las subidas en uso las registra el propio almacén al crear la carpeta del
+  trabajo, bajo el mismo lock con el que borra. Así una subida que termina en el
+  threadpool justo cuando otra pestaña lanza un trabajo nunca borra el lote que
+  ese trabajo va a leer: o el borrado ocurre antes y el trabajo se rechaza con
+  404, o el trabajo se registra antes y su lote se conserva.
 
 El proceso web no decodifica imágenes: del objetivo lee solo la cabecera (tamaño
 y orientación EXIF) para informar sus dimensiones.
@@ -62,6 +67,10 @@ class UploadTooLargeError(UploadError):
   """La subida (o lo descomprimido) supera el límite configurado."""
 
   status_code = HTTP_TOO_LARGE
+
+
+class UploadGoneError(Exception):
+  """Una subida que pidió un trabajo se borró antes de que el trabajo la reservara."""
 
 
 @dataclass(frozen=True)
@@ -164,6 +173,10 @@ class UploadStore:
     self._targets: dict[str, TargetSummary] = {}
     self.last_tiles: TilesSummary | None = None
     self.last_target: TargetSummary | None = None
+    # Subidas del trabajo en curso. Se lee con el lock tomado; ``release()`` la
+    # reemplaza sin lock (asignar una referencia es atómico) para no bloquear el
+    # event loop mientras otro hilo borra archivos.
+    self._in_use: frozenset[str] = frozenset()
 
   # --- Ciclo de vida ------------------------------------------------------------
 
@@ -176,6 +189,7 @@ class UploadStore:
       self._tiles.clear()
       self._targets.clear()
       self.last_tiles = self.last_target = None
+      self._in_use = frozenset()
 
   def cleanup(self) -> None:
     """Al apagar: borra subidas y resultados (solo las carpetas propias)."""
@@ -184,19 +198,19 @@ class UploadStore:
 
   # --- Lote ---------------------------------------------------------------------
 
-  def save_tiles_files(self, files: Iterable[tuple[str, BinaryIO]], protected: set[str]) -> TilesSummary:
+  def save_tiles_files(self, files: Iterable[tuple[str, BinaryIO]]) -> TilesSummary:
     """Lote como archivos sueltos: ``(nombre, contenido)``."""
     tiles_id = _new_id()
     folder = self.root / TILES_DIR / tiles_id
-    return self._finish_tiles(tiles_id, folder, lambda: self._write_files(folder, list(files)), protected)
+    return self._finish_tiles(tiles_id, folder, lambda: self._write_files(folder, list(files)))
 
-  def save_tiles_zip(self, source: BinaryIO, protected: set[str]) -> TilesSummary:
+  def save_tiles_zip(self, source: BinaryIO) -> TilesSummary:
     """Lote como un único zip, que se extrae de forma segura."""
     tiles_id = _new_id()
     folder = self.root / TILES_DIR / tiles_id
-    return self._finish_tiles(tiles_id, folder, lambda: self._extract_zip(folder, source), protected)
+    return self._finish_tiles(tiles_id, folder, lambda: self._extract_zip(folder, source))
 
-  def _finish_tiles(self, tiles_id: str, folder: Path, write, protected: set[str]) -> TilesSummary:
+  def _finish_tiles(self, tiles_id: str, folder: Path, write) -> TilesSummary:
     """Escribe el lote, valida que haya imágenes y lo registra como el último."""
     folder.mkdir(parents=True)
     try:
@@ -210,7 +224,7 @@ class UploadStore:
     summary = TilesSummary(tiles_id, len(counts.accepted), counts.ignored, counts.rejected, samples)
     with self._lock:
       self._tiles[tiles_id] = self.last_tiles = summary
-      self._prune(TILES_DIR, self._tiles, {tiles_id, *protected})
+      self._prune(TILES_DIR, self._tiles, {tiles_id, *self._in_use})
     return summary
 
   def _write_files(self, folder: Path, files: list[tuple[str, BinaryIO]]) -> _Counts:
@@ -269,7 +283,7 @@ class UploadStore:
 
   # --- Objetivo -----------------------------------------------------------------
 
-  def save_target(self, raw_name: str, source: BinaryIO, protected: set[str]) -> TargetSummary:
+  def save_target(self, raw_name: str, source: BinaryIO) -> TargetSummary:
     """Guarda la imagen objetivo y lee sus dimensiones de la cabecera."""
     name = PurePosixPath((raw_name or "").replace("\\", "/")).name
     if not has_image_extension(name) or is_macos_metadata(name):
@@ -286,7 +300,7 @@ class UploadStore:
     summary = TargetSummary(target_id, name, width, height)
     with self._lock:
       self._targets[target_id] = self.last_target = summary
-      self._prune(TARGETS_DIR, self._targets, {target_id, *protected})
+      self._prune(TARGETS_DIR, self._targets, {target_id, *self._in_use})
     return summary
 
   # --- Consultas ----------------------------------------------------------------
@@ -315,16 +329,27 @@ class UploadStore:
 
   # --- Trabajos y retención -----------------------------------------------------
 
-  def create_job_dir(self, job_id: str, protected: set[str]) -> Path:
-    """Carpeta de resultados de un trabajo nuevo; borra la de los anteriores y lo no retenido."""
+  def create_job_dir(self, job_id: str, tiles_id: str, target_id: str) -> Path:
+    """Reserva las subidas del trabajo nuevo y crea su carpeta de resultados.
+
+    Borra los resultados anteriores y lo no retenido. Lanza ``UploadGoneError``
+    si una subida pedida ya se borró (la reserva y el borrado comparten el lock).
+    """
     with self._lock:
+      if tiles_id not in self._tiles or target_id not in self._targets:
+        raise UploadGoneError("el lote" if tiles_id not in self._tiles else "la imagen objetivo")
+      self._in_use = frozenset((tiles_id, target_id))
       for folder in (self.root / JOBS_DIR).iterdir():
         _remove(folder)
-      self._prune(TILES_DIR, self._tiles, {*protected, *self._last_ids()})
-      self._prune(TARGETS_DIR, self._targets, {*protected, *self._last_ids()})
+      self._prune(TILES_DIR, self._tiles, {*self._in_use, *self._last_ids()})
+      self._prune(TARGETS_DIR, self._targets, {*self._in_use, *self._last_ids()})
     folder = self.root / JOBS_DIR / job_id
     folder.mkdir(parents=True)
     return folder
+
+  def release(self) -> None:
+    """El trabajo en curso terminó: sus subidas vuelven a la retención normal."""
+    self._in_use = frozenset()
 
   def _last_ids(self) -> set[str]:
     """Ids del último lote y el último objetivo."""

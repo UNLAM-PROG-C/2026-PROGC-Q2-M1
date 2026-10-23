@@ -24,7 +24,7 @@ from app.core.params import InvalidParamsError, MosaicParams, derive_rows
 from app.core.result import StageTimings
 from app.web.execution import ExecutionModeError, backends_for_mode, effective_k
 from app.web.rules import MAX_SEED
-from app.web.uploads import UploadStore
+from app.web.uploads import UploadGoneError, UploadStore
 from app.worker.messages import (
   BackendFinished,
   JobFailed,
@@ -142,10 +142,6 @@ class JobManager:
     """Hay un trabajo en curso."""
     return self.snapshot is not None and self.snapshot.status == STATUS_RUNNING
 
-  def protected_ids(self) -> set[str]:
-    """Subidas que usa el trabajo en curso (no se borran)."""
-    return {self.snapshot.tiles_id, self.snapshot.target_id} if self.running else set()
-
   def worker_json(self) -> dict:
     """``WorkerInfo`` del frontend."""
     return {"ready": self.ready is not None, "error": self.worker_error}
@@ -156,11 +152,21 @@ class JobManager:
       if self.running:
         raise JobRequestError(HTTP_CONFLICT, JOB_CONFLICT_REASON)
       snapshot = self._build_snapshot(request)
-      protected = {request.tiles_id, request.target_id}
-      output_dir = await run_in_threadpool(self._store.create_job_dir, snapshot.job_id, protected)
-      self._dispatch(snapshot, output_dir)
+      output_dir = await self._reserve(snapshot)
+      try:
+        self._dispatch(snapshot, output_dir)
+      except JobRequestError:
+        self._store.release()
+        raise
       self.snapshot = snapshot
       return snapshot
+
+  async def _reserve(self, snapshot: JobSnapshot) -> Path:
+    """Reserva las subidas del trabajo en el almacén y crea su carpeta de resultados."""
+    try:
+      return await run_in_threadpool(self._store.create_job_dir, snapshot.job_id, snapshot.tiles_id, snapshot.target_id)
+    except UploadGoneError as error:
+      raise JobRequestError(HTTP_NOT_FOUND, f"{error} ya no está disponible: volvé a subirlo") from error
 
   def _build_snapshot(self, request: JobRequest) -> JobSnapshot:
     """Valida el pedido completo y arma el snapshot del trabajo nuevo."""
@@ -257,8 +263,10 @@ class JobManager:
       return [{"type": "backend_finished", **base, "result": result_json(event)}]
     if isinstance(event, JobFinished):
       job.status = STATUS_FINISHED
+      self._store.release()
       return [{"type": "job_finished", **base}]
     if isinstance(event, JobFailed | JobRejected):
       job.status, job.error = STATUS_FAILED, event.reason
+      self._store.release()
       return [{"type": "job_failed", **base, "reason": event.reason}]
     return []

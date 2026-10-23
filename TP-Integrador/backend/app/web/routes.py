@@ -105,13 +105,10 @@ def _register_tiles_routes(app: FastAPI, context: "AppContext") -> None:
     _check_content_length(request, settings.max_upload_bytes)
     async with request.form(max_files=settings.max_zip_entries + 1, max_fields=settings.max_zip_entries + 1) as form:
       archive, files = _only_files(form.getlist("zip")), _only_files(form.getlist("files"))
-      protected = context.jobs.protected_ids()
       if archive:
-        summary = await run_in_threadpool(store.save_tiles_zip, archive[0].file, protected)
+        summary = await run_in_threadpool(store.save_tiles_zip, archive[0].file)
       elif files:
-        summary = await run_in_threadpool(
-          store.save_tiles_files, [(f.filename or "", f.file) for f in files], protected
-        )
+        summary = await run_in_threadpool(store.save_tiles_files, [(f.filename or "", f.file) for f in files])
       else:
         raise UploadError("no se recibió ningún archivo: mandá un zip en 'zip' o imágenes en 'files'")
     return {
@@ -145,8 +142,7 @@ def _register_target_routes(app: FastAPI, context: "AppContext") -> None:
       files = _only_files(form.getlist("file"))
       if not files:
         raise UploadError("no se recibió la imagen objetivo en el campo 'file'")
-      protected = context.jobs.protected_ids()
-      summary = await run_in_threadpool(store.save_target, files[0].filename or "", files[0].file, protected)
+      summary = await run_in_threadpool(store.save_target, files[0].filename or "", files[0].file)
     return target_json(summary)
 
   @app.get("/api/targets/{target_id}/image")

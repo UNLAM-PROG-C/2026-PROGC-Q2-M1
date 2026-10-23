@@ -5,7 +5,7 @@ import zipfile
 import pytest
 from PIL import Image
 
-from app.web.uploads import TILES_DIR, UploadError, UploadStore, UploadTooLargeError
+from app.web.uploads import TILES_DIR, UploadError, UploadGoneError, UploadStore, UploadTooLargeError
 
 MAX_BYTES = 200_000
 MAX_ENTRIES = 50
@@ -45,7 +45,7 @@ def stored_files(store, tiles_id):
 
 def test_loose_files(store):
   files = [("a.jpg", io.BytesIO(png_bytes())), ("B.PNG", io.BytesIO(png_bytes())), ("notas.txt", io.BytesIO(b"x"))]
-  summary = store.save_tiles_files(files, set())
+  summary = store.save_tiles_files(files)
   assert (summary.accepted, summary.ignored, summary.rejected) == (2, 1, 0)
   assert stored_files(store, summary.tiles_id) == ["B.PNG", "a.jpg"]
   assert store.last_tiles == summary
@@ -53,7 +53,7 @@ def test_loose_files(store):
 
 def test_zip_with_folders_keeps_relative_paths(store):
   entries = {"viaje/dia1/a.jpg": png_bytes(), "viaje/dia2/b.webp": png_bytes(), "c.jpeg": png_bytes()}
-  summary = store.save_tiles_zip(zip_bytes(entries), set())
+  summary = store.save_tiles_zip(zip_bytes(entries))
   assert summary.accepted == 3
   assert stored_files(store, summary.tiles_id) == ["c.jpeg", "viaje/dia1/a.jpg", "viaje/dia2/b.webp"]
   assert summary.samples == ("c.jpeg", "viaje/dia1/a.jpg", "viaje/dia2/b.webp")
@@ -63,14 +63,14 @@ def test_zip_with_folders_keeps_relative_paths(store):
 
 def test_zip_ignores_macos_metadata_and_text(store):
   entries = {"a.jpg": png_bytes(), "leeme.txt": b"x", "__MACOSX/._a.jpg": b"x", "carpeta/._b.jpg": b"x"}
-  summary = store.save_tiles_zip(zip_bytes(entries), set())
+  summary = store.save_tiles_zip(zip_bytes(entries))
   assert (summary.accepted, summary.ignored, summary.rejected) == (1, 3, 0)
   assert stored_files(store, summary.tiles_id) == ["a.jpg"]
 
 
 def test_zip_rejects_path_traversal_absolute_paths_and_symlinks(store, tmp_path):
   entries = {"a.jpg": png_bytes(), "../../etc/passwd": b"root", "../fuera.jpg": png_bytes(), "/abs.jpg": png_bytes()}
-  summary = store.save_tiles_zip(zip_bytes(entries, symlinks=("enlace.jpg",)), set())
+  summary = store.save_tiles_zip(zip_bytes(entries, symlinks=("enlace.jpg",)))
   assert (summary.accepted, summary.rejected) == (1, 4)
   assert not (tmp_path / "fuera.jpg").exists() and not (store.root / TILES_DIR / "fuera.jpg").exists()
   assert stored_files(store, summary.tiles_id) == ["a.jpg"]
@@ -79,65 +79,86 @@ def test_zip_rejects_path_traversal_absolute_paths_and_symlinks(store, tmp_path)
 def test_zip_over_uncompressed_limit_is_413_and_deleted(store):
   big = bytes(MAX_BYTES + 1)  # Se comprime muy bien: el zip es chico, lo descomprimido no.
   with pytest.raises(UploadTooLargeError) as error:
-    store.save_tiles_zip(zip_bytes({"a.png": png_bytes(), "grande.png": big}), set())
+    store.save_tiles_zip(zip_bytes({"a.png": png_bytes(), "grande.png": big}))
   assert error.value.status_code == 413
   assert list((store.root / TILES_DIR).iterdir()) == []
 
 
 def test_zip_file_over_upload_limit_is_413_and_deleted(store, tmp_path):
   with pytest.raises(UploadTooLargeError):
-    store.save_tiles_zip(io.BytesIO(bytes(MAX_BYTES + 1)), set())
+    store.save_tiles_zip(io.BytesIO(bytes(MAX_BYTES + 1)))
   assert list((store.root / TILES_DIR).iterdir()) == []
 
 
 def test_too_many_entries_is_413(store):
   entries = {f"{index}.png": b"x" for index in range(MAX_ENTRIES + 1)}
   with pytest.raises(UploadTooLargeError):
-    store.save_tiles_zip(zip_bytes(entries), set())
+    store.save_tiles_zip(zip_bytes(entries))
 
 
 def test_batch_without_images_is_rejected(store):
   with pytest.raises(UploadError) as error:
-    store.save_tiles_files([("a.txt", io.BytesIO(b"x"))], set())
+    store.save_tiles_files([("a.txt", io.BytesIO(b"x"))])
   assert error.value.status_code == 400
 
 
 def test_target_dimensions_and_gif_rejected(store):
-  target = store.save_target("foto.png", io.BytesIO(png_bytes((40, 30))), set())
+  target = store.save_target("foto.png", io.BytesIO(png_bytes((40, 30))))
   assert (target.width, target.height, target.filename) == (40, 30, "foto.png")
   assert store.target_path(target).is_file()
   with pytest.raises(UploadError) as error:
-    store.save_target("anim.gif", io.BytesIO(b"GIF89a"), set())
+    store.save_target("anim.gif", io.BytesIO(b"GIF89a"))
   assert error.value.status_code == 400
   assert "JPEG, PNG o WebP" in str(error.value)
 
 
 def test_target_with_image_extension_but_invalid_content_is_400(store):
   with pytest.raises(UploadError, match="no se pudo leer"):
-    store.save_target("roto.jpg", io.BytesIO(b"no es una imagen"), set())
+    store.save_target("roto.jpg", io.BytesIO(b"no es una imagen"))
 
 
 def test_new_batch_keeps_last_target_and_only_new_batch(store):
-  target = store.save_target("t.png", io.BytesIO(png_bytes()), set())
-  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))], set())
-  second = store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))], set())
+  target = store.save_target("t.png", io.BytesIO(png_bytes()))
+  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
+  second = store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))])
   assert [path.name for path in (store.root / TILES_DIR).iterdir()] == [second.tiles_id]
   assert store.tiles(first.tiles_id) is None and store.tiles(second.tiles_id) == second
   assert store.last_target == target and store.target_path(target).is_file()
 
 
 def test_batch_used_by_running_job_is_kept(store):
-  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))], set())
-  store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))], {first.tiles_id})
+  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
+  target = store.save_target("t.png", io.BytesIO(png_bytes()))
+  store.create_job_dir("job1", first.tiles_id, target.target_id)
+  store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))])
   assert store.tiles_dir(first.tiles_id).is_dir()
 
 
+def test_batch_is_released_when_job_ends(store):
+  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
+  target = store.save_target("t.png", io.BytesIO(png_bytes()))
+  store.create_job_dir("job1", first.tiles_id, target.target_id)
+  store.release()
+  store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))])
+  assert not store.tiles_dir(first.tiles_id).exists()
+
+
+def test_job_with_pruned_batch_is_rejected(store):
+  first = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
+  target = store.save_target("t.png", io.BytesIO(png_bytes()))
+  store.save_tiles_files([("b.png", io.BytesIO(png_bytes()))])
+  with pytest.raises(UploadGoneError):
+    store.create_job_dir("job1", first.tiles_id, target.target_id)
+
+
 def test_new_job_removes_previous_results_and_reset_cleans_everything(store):
-  first = store.create_job_dir("job1", set())
+  tiles = store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
+  target = store.save_target("t.png", io.BytesIO(png_bytes()))
+  first = store.create_job_dir("job1", tiles.tiles_id, target.target_id)
   (first / "cpu").mkdir()
-  second = store.create_job_dir("job2", set())
+  second = store.create_job_dir("job2", tiles.tiles_id, target.target_id)
   assert not first.exists() and second.is_dir()
-  store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))], set())
+  store.save_tiles_files([("a.png", io.BytesIO(png_bytes()))])
   store.reset()
   assert all(not any(folder.iterdir()) for folder in store.root.iterdir())
   assert store.last_tiles is None

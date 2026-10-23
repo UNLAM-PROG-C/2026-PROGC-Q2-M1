@@ -17,6 +17,7 @@ from app.backends.cpu.calibration import CpuCalibration
 from app.backends.registry import BackendStatus, GpuPreference
 from app.core.params import MosaicParams
 from app.core.result import StageTimings
+from app.core.verification import VerificationSummary
 
 # Etapas propias del worker que se suman a las de los backends en el progreso.
 STAGE_LOAD = "load"
@@ -95,6 +96,23 @@ class BackendFinished:
 
 
 @dataclass(frozen=True)
+class BackendFailed:
+  """Un backend de una comparación falló; los demás siguen (design D3 del cambio 4)."""
+
+  job_id: str
+  backend: str
+  reason: str
+
+
+@dataclass(frozen=True)
+class ComparisonFinished:
+  """Verificación por celdas de una comparación, contra la referencia (CPU)."""
+
+  job_id: str
+  verification: VerificationSummary
+
+
+@dataclass(frozen=True)
 class JobFinished:
   """Todos los backends del trabajo terminaron."""
 
@@ -128,4 +146,14 @@ class WorkerCrashed:
 
 
 Command = RunJob | Shutdown
-WorkerEvent = WorkerReady | JobProgress | LoadFinished | BackendFinished | JobFinished | JobFailed | JobRejected
+WorkerEvent = (
+  WorkerReady
+  | JobProgress
+  | LoadFinished
+  | BackendFinished
+  | BackendFailed
+  | ComparisonFinished
+  | JobFinished
+  | JobFailed
+  | JobRejected
+)

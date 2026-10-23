@@ -2,11 +2,16 @@
 
 ``JobRunner.run()`` carga (con la cache de ``app/loading``), genera ``choice``
 una sola vez, toma los backends pedidos con ``registry.resolve()`` y los
-ejecuta en orden. El progreso de cada backend (Observer ``on_progress``) se
-traduce en mensajes ``JobProgress`` con *throttling*. La imagen se guarda
-después de que el backend devolvió el resultado, o sea fuera de la medición.
-Cualquier error termina en un ``JobFailed`` con un motivo legible: el worker
-sigue vivo y puede ejecutar el trabajo siguiente.
+ejecuta en orden, de a uno. El progreso de cada backend (Observer
+``on_progress``) se traduce en mensajes ``JobProgress`` con *throttling*. La
+imagen se guarda después de que el backend devolvió el resultado, o sea fuera de
+la medición. Cualquier error termina en un ``JobFailed`` con un motivo legible:
+el worker sigue vivo y puede ejecutar el trabajo siguiente.
+
+Comparación (cambio 4, design D2 y D3): con más de un backend, la falla de uno
+se informa con ``BackendFailed`` y no corta a los demás. De cada resultado se
+toma una huella (``topk_idx`` y un digest por celda) antes de liberar la imagen,
+y al final se publica ``ComparisonFinished`` con la verificación contra CPU.
 """
 
 import dataclasses
@@ -16,24 +21,28 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Protocol
 
-from app.backends.registry import BackendUnavailableError
+from app.backends.registry import CPU, BackendUnavailableError
 from app.core.backend import MosaicBackend, OutOfMemoryError
 from app.core.choice import generate_choice
 from app.core.params import InvalidParamsError, MosaicParams
+from app.core.result import MosaicResult
+from app.core.verification import ResultFingerprint, fingerprint, verify
 from app.loading.cache import LoadResult
 from app.loading.target_loader import InvalidTargetError
 from app.loading.tile_loader import NoValidTilesError
 from app.worker.messages import (
   STAGE_LOAD,
   STAGE_SAVE,
+  BackendFailed,
   BackendFinished,
+  ComparisonFinished,
   JobFailed,
   JobFinished,
   JobProgress,
   LoadFinished,
   RunJob,
 )
-from app.worker.output import save_outputs
+from app.worker.output import SavedOutputs, save_outputs
 
 # Como mucho un mensaje de progreso cada este intervalo (salvo cambio de etapa o fin).
 PROGRESS_MIN_INTERVAL_MS = 100
@@ -44,6 +53,8 @@ OUT_OF_MEMORY_REASON = "memoria insuficiente en el dispositivo"
 UNEXPECTED_REASON = "error inesperado en el worker"
 # Errores esperables cuyo mensaje ya es legible para la interfaz.
 READABLE_ERRORS = (InvalidParamsError, InvalidTargetError, NoValidTilesError, BackendUnavailableError)
+# Backend contra el que se verifica una comparación.
+COMPARISON_REFERENCE = CPU
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +130,11 @@ class JobRunner:
     try:
       loaded, params = self._load(command)
       choice = generate_choice(params.seed, params.k, loaded.target.rows * params.cols)
-      for backend in self._registry.resolve(command.backends):
-        self._run_backend(command, backend, loaded, params, choice)
+      backends = self._registry.resolve(command.backends)
+      if len(backends) == 1:
+        self._run_backend(command, backends[0], loaded, params, choice)
+      else:
+        self._compare(command, backends, loaded, params, choice)
     except Exception as error:
       logger.exception("falló el trabajo %s", command.job_id)
       return JobFailed(command.job_id, readable_reason(error))
@@ -148,27 +162,54 @@ class JobRunner:
     self._sink.put(load)
     return loaded, params
 
-  def _run_backend(
-    self, command: RunJob, backend: MosaicBackend, loaded: LoadResult, params: MosaicParams, choice
+  def _compare(
+    self, command: RunJob, backends: list[MosaicBackend], loaded: LoadResult, params: MosaicParams, choice
   ) -> None:
-    """Ejecuta un backend y, ya fuera de la medición, guarda la imagen."""
+    """Ejecuta los backends en orden; una falla se informa y no corta a los demás."""
+    fingerprints: dict[str, ResultFingerprint] = {}
+    failure: Exception | None = None
+    for backend in backends:
+      try:
+        fingerprints[backend.name] = self._run_backend(command, backend, loaded, params, choice, compared=True)
+      except Exception as error:
+        logger.exception("falló %s en el trabajo %s", backend.name, command.job_id)
+        self._sink.put(BackendFailed(command.job_id, backend.name, readable_reason(error)))
+        failure = error
+    if not fingerprints:
+      raise failure
+    if COMPARISON_REFERENCE in fingerprints and len(fingerprints) > 1:
+      self._sink.put(ComparisonFinished(command.job_id, verify(fingerprints, COMPARISON_REFERENCE)))
+
+  def _run_backend(
+    self, command: RunJob, backend: MosaicBackend, loaded: LoadResult, params: MosaicParams, choice, compared=False
+  ) -> ResultFingerprint | None:
+    """Ejecuta un backend y, ya fuera de la medición, guarda la imagen.
+
+    Si ``compared``, devuelve la huella del resultado; la imagen se libera al
+    volver, antes de que empiece el backend siguiente.
+    """
     progress = ThrottledProgress(self._sink, command.job_id, backend.name)
     result = backend.run(loaded.tiles.tiles_src, loaded.target.target_src, params, choice, progress)
     progress(STAGE_SAVE, STAGE_START)
     saved = save_outputs(result.image, Path(command.output_dir) / backend.name, self._preview_max_side)
+    print_ = fingerprint(result.image, result.topk_idx, params.tile_px) if compared else None
     progress(STAGE_SAVE, STAGE_END)
-    height, width = result.image.shape[:2]
-    self._sink.put(
-      BackendFinished(
-        command.job_id,
-        backend.name,
-        result.device_name,
-        result.timings,
-        backend.init_ms,
-        saved.png_path,
-        saved.jpeg_path,
-        saved.preview_path,
-        width,
-        height,
-      )
-    )
+    self._sink.put(_finished_event(command.job_id, backend, result, saved))
+    return print_
+
+
+def _finished_event(job_id: str, backend: MosaicBackend, result: MosaicResult, saved: SavedOutputs) -> BackendFinished:
+  """``BackendFinished`` con los tiempos y las rutas de la imagen guardada."""
+  height, width = result.image.shape[:2]
+  return BackendFinished(
+    job_id,
+    backend.name,
+    result.device_name,
+    result.timings,
+    backend.init_ms,
+    saved.png_path,
+    saved.jpeg_path,
+    saved.preview_path,
+    width,
+    height,
+  )

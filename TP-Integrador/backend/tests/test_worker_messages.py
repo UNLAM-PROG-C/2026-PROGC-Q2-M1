@@ -9,6 +9,7 @@ from app.backends.cpu.calibration import CpuCalibration
 from app.backends.registry import BackendStatus, GpuPreference
 from app.core.params import MosaicParams
 from app.core.result import StageTimings
+from app.core.verification import CellDifferences, VerificationSummary
 from app.worker import messages
 
 TIMINGS = StageTimings(1.0, 2.0, 3.0, 4.0, 10.0, transfer_h2d_ms=0.5)
@@ -23,6 +24,8 @@ SAMPLES = [
   messages.JobProgress("j1", None, messages.STAGE_LOAD, 0.0),
   messages.LoadFinished("j1", 12.5, False, 200, 3, 60, 80, 4800),
   messages.BackendFinished("j1", "cuda", "RTX", TIMINGS, 5.0, "a.png", "a.jpg", "p.jpg", 2560, 1920),
+  messages.BackendFailed("j1", "cuda", "memoria insuficiente en el dispositivo"),
+  messages.ComparisonFinished("j1", VerificationSummary("cpu", {"opencl": CellDifferences(3, 0, 3)})),
   messages.JobFinished("j1"),
   messages.JobFailed("j1", "memoria insuficiente en el dispositivo"),
   messages.JobRejected("j2", "ya hay un trabajo en curso"),

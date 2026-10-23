@@ -45,7 +45,11 @@ export function makeAppState(overrides: Partial<AppState> = {}): AppState
   return {
     worker: {ready: true, error: null},
     backends: [],
-    execution: {cpu: {available: true, device: 'CPU de prueba'}, gpu: {available: false, api: null, device: null, reason: 'no se detectó una GPU compatible'}},
+    execution: {
+      cpu: {available: true, device: 'CPU de prueba'},
+      gpu: {available: false, api: null, device: null, reason: 'no se detectó una GPU compatible'},
+      both: {available: false, reason: 'no se detectó una GPU compatible'},
+    },
     calibration: null,
     rules: makeRules(),
     job: null,
@@ -68,6 +72,8 @@ export function makeJob(overrides: Partial<JobSnapshot> = {}): JobSnapshot
     progress: null,
     load: null,
     results: [],
+    failures: [],
+    verification: null,
     error: null,
     ...overrides,
   };
@@ -92,4 +98,12 @@ export function makeCpuResult(): BackendResult
     width: TARGET_WIDTH,
     height: TARGET_HEIGHT,
   };
+}
+
+/** Resultado de GPU (CUDA) con transferencias medidas. */
+export function makeGpuResult(timings: Partial<BackendResult['timings']> = {}): BackendResult
+{
+  const base = {prepare_tiles_ms: 0.5, target_descriptors_ms: 0.5, matching_ms: 0.5, compose_ms: 1, total_ms: 5};
+  const transfers = {transfer_h2d_ms: 1, transfer_d2h_ms: 1, staging_h2d_ms: 0.25, staging_d2h_ms: 0.25};
+  return {...makeCpuResult(), backend: 'cuda', device: 'GPU de prueba', init_ms: 2, timings: {...base, ...transfers, ...timings}};
 }

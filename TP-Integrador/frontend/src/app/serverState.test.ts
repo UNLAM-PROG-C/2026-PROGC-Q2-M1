@@ -34,6 +34,14 @@ describe('applyServerEvent', () =>
     expect(isJobRunning(state)).toBe(false);
   });
 
+  it('en una comparación guarda la falla aislada de un backend y la verificación', () =>
+  {
+    const verification = {reference: 'cpu' as const, identical: true, differences: {}};
+    let state = applyServerEvent(makeAppState({job: makeJob({mode: 'both', backends: ['cuda', 'cpu']})}), {type: 'backend_failed', job_id: 'job-1', backend: 'cuda', reason: 'memoria insuficiente en el dispositivo'});
+    state = applyServerEvent(state, {type: 'comparison_finished', job_id: 'job-1', verification});
+    expect(state?.job).toMatchObject({status: 'running', failures: [{backend: 'cuda', reason: 'memoria insuficiente en el dispositivo'}], verification});
+  });
+
   it('job_failed guarda el motivo', () =>
   {
     const state = applyServerEvent(makeAppState({job: makeJob()}), {type: 'job_failed', job_id: 'job-1', reason: 'memoria insuficiente en el dispositivo'});

@@ -2,8 +2,8 @@
 // Los nombres de los campos siguen el JSON del backend (snake_case) para no
 // tener que traducirlos: este archivo es el contrato entre ambos lados.
 
-/** Forma de ejecución que elige la persona (design D4). */
-export type ExecutionMode = 'cpu' | 'gpu';
+/** Forma de ejecución que elige la persona (design D4; `both` es del cambio 4). */
+export type ExecutionMode = 'cpu' | 'gpu' | 'both';
 
 /** Nombre de un backend concreto del registro (cambio 2). */
 export type BackendName = 'cpu' | 'cuda' | 'opencl';
@@ -44,10 +44,18 @@ export interface GpuOption
   reason: string | null;
 }
 
+/** Opción "Ambas (CPU y GPU)": disponible si lo están la GPU preferida y la CPU. */
+export interface BothOption
+{
+  available: boolean;
+  reason: string | null;
+}
+
 export interface ExecutionOptions
 {
   cpu: CpuOption;
   gpu: GpuOption;
+  both: BothOption;
 }
 
 /** Costos unitarios medidos al iniciar el worker (design D8), en nanosegundos. */
@@ -163,6 +171,29 @@ export interface BackendResult
   height: number;
 }
 
+/** Falla aislada de un backend en una comparación (`BackendFailed`). */
+export interface BackendFailure
+{
+  backend: BackendName;
+  reason: string;
+}
+
+/** Celdas en las que un backend no coincide con la referencia. */
+export interface CellDifferences
+{
+  topk_cells: number;
+  image_cells: number;
+  total_cells: number;
+}
+
+/** Verificación de una comparación contra la referencia (siempre CPU). */
+export interface Verification
+{
+  reference: BackendName;
+  identical: boolean;
+  differences: Partial<Record<BackendName, CellDifferences>>;
+}
+
 export interface JobProgressInfo
 {
   backend: BackendName | null;
@@ -185,6 +216,8 @@ export interface JobSnapshot
   progress: JobProgressInfo | null;
   load: LoadInfo | null;
   results: BackendResult[];
+  failures: BackendFailure[];
+  verification: Verification | null;
   error: string | null;
 }
 
@@ -241,6 +274,19 @@ export interface BackendFinishedEvent
   result: BackendResult;
 }
 
+export interface BackendFailedEvent extends BackendFailure
+{
+  type: 'backend_failed';
+  job_id: string;
+}
+
+export interface ComparisonFinishedEvent
+{
+  type: 'comparison_finished';
+  job_id: string;
+  verification: Verification;
+}
+
 export interface JobFinishedEvent
 {
   type: 'job_finished';
@@ -266,6 +312,8 @@ export type ServerEvent =
   | JobProgressEvent
   | LoadFinishedEvent
   | BackendFinishedEvent
+  | BackendFailedEvent
+  | ComparisonFinishedEvent
   | JobFinishedEvent
   | JobFailedEvent
   | WorkerStatusEvent;

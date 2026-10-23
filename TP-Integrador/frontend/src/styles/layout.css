@@ -132,10 +132,16 @@
   line-height: var(--type-caption-line);
 }
 
-.images-step,
-.mode-cards {
+.images-step {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+/* CPU, GPU y Ambas (cambio 4). */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-lg);
 }
 

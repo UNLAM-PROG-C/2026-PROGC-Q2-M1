@@ -1,4 +1,4 @@
-// Paso 3: forma de ejecución (CPU o GPU) según el hardware que informa el
+// Paso 3: forma de ejecución (CPU, GPU o Ambas) según el hardware que informa el
 // backend, estimación de CPU con confirmación y lanzamiento del trabajo.
 // Mientras haya un trabajo en curso (de cualquier pestaña) no se puede ejecutar.
 
@@ -21,18 +21,31 @@ interface ExecutionStepProps
   connected: boolean;
 }
 
+/** Detalle de cada tarjeta: estimación de CPU o motivo por el que no está disponible. */
+function modeDetails(server: AppState | null, wizard: WizardState): Record<ExecutionMode, string | null | undefined>
+{
+  const {gpu, both} = server?.execution ?? {};
+  const seconds = cpuEstimateSeconds(server, wizard);
+  const estimate = seconds === null ? undefined : `CPU: tiempo estimado ${formatEstimate(seconds)}`;
+  return {
+    cpu: estimate ?? server?.execution.cpu.device,
+    gpu: gpu?.available ? undefined : (gpu?.reason ?? NO_GPU_REASON),
+    both: both?.available ? estimate : (both?.reason ?? NO_GPU_REASON),
+  };
+}
+
 function ModeCards({wizard, dispatch, server}: ExecutionStepProps): JSX.Element
 {
   const select = (mode: ExecutionMode) => () => dispatch({type: 'MODE_SELECTED', mode});
-  const gpu = server?.execution.gpu;
-  const seconds = cpuEstimateSeconds(server, wizard);
-  const cpuDetail = seconds === null ? server?.execution.cpu.device : `CPU: tiempo estimado ${formatEstimate(seconds)}`;
-  const gpuDetail = gpu?.available ? undefined : (gpu?.reason ?? NO_GPU_REASON);
+  const {gpu, both} = server?.execution ?? {};
+  const details = modeDetails(server, wizard);
   return (
     <div className="mode-cards" role="radiogroup" aria-label="Forma de ejecución">
-      <OptionCard title="CPU" selected={wizard.mode === 'cpu'} onSelect={select('cpu')} detail={cpuDetail} />
+      <OptionCard title="CPU" selected={wizard.mode === 'cpu'} onSelect={select('cpu')} detail={details.cpu} />
       <OptionCard title={gpu ? gpuTitle(gpu) : 'GPU'} selected={wizard.mode === 'gpu' && Boolean(gpu?.available)} disabled={!gpu?.available}
-        onSelect={select('gpu')} detail={gpuDetail} />
+        onSelect={select('gpu')} detail={details.gpu} />
+      <OptionCard title="Ambas (CPU y GPU)" selected={wizard.mode === 'both' && Boolean(both?.available)} disabled={!both?.available}
+        onSelect={select('both')} detail={details.both} />
     </div>
   );
 }

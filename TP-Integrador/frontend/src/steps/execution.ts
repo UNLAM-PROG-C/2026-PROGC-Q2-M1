@@ -1,5 +1,6 @@
 // Lógica del paso 3 sin DOM: textos de las opciones, motivo por el que no se
-// puede ejecutar y estimación de CPU con confirmación (design D4 y D8).
+// puede ejecutar y estimación de CPU con confirmación (design D4 y D8). La
+// opción "Ambas" (cambio 4) corre GPU y CPU, así que también se estima.
 
 import type {AppState, ExecutionMode, GpuOption, JobRequest} from '../api/types';
 import {isJobRunning} from '../app/serverState';
@@ -53,10 +54,16 @@ export function cpuEstimateSeconds(server: AppState | null, wizard: WizardState)
   return estimateCpuSeconds(server.calibration, info, wizard.params.tilePx);
 }
 
+/** "CPU" y "Ambas" ejecutan en CPU: a las dos se les aplica la estimación (spec "Estimación de la comparación"). */
+export function runsOnCpu(mode: ExecutionMode): boolean
+{
+  return mode === 'cpu' || mode === 'both';
+}
+
 export function needsConfirmation(server: AppState | null, wizard: WizardState): boolean
 {
   const seconds = cpuEstimateSeconds(server, wizard);
-  return wizard.mode === 'cpu' && seconds !== null && server !== null && seconds > server.rules.cpu_confirm_seconds;
+  return runsOnCpu(wizard.mode) && seconds !== null && server !== null && seconds > server.rules.cpu_confirm_seconds;
 }
 
 export function buildJobRequest(wizard: WizardState): JobRequest | null

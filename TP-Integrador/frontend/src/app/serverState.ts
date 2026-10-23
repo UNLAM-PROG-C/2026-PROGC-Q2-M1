@@ -25,6 +25,10 @@ function applyJobEvent(state: AppState, event: ServerEvent): AppState
       return updateJob(state, event.job_id, (job) => ({...job, load: event.load}));
     case 'backend_finished':
       return updateJob(state, event.job_id, (job) => ({...job, results: [...job.results, event.result]}));
+    case 'backend_failed':
+      return updateJob(state, event.job_id, (job) => ({...job, failures: [...job.failures, {backend: event.backend, reason: event.reason}]}));
+    case 'comparison_finished':
+      return updateJob(state, event.job_id, (job) => ({...job, verification: event.verification}));
     case 'job_finished':
       return updateJob(state, event.job_id, (job) => ({...job, status: 'finished'}));
     case 'job_failed':

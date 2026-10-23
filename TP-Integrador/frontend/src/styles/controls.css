@@ -338,3 +338,18 @@
     grid-column: 1 / -1;
   }
 }
+
+/* --- Progreso de una comparación: un grupo de barras por backend --- */
+.stage-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.stage-group__title {
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-body-strong-line);
+  letter-spacing: var(--type-body-tracking);
+}

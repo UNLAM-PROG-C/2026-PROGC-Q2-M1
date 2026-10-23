@@ -24,27 +24,51 @@ function renderExecution(server: AppState): void
 }
 
 const CUDA_GPU = {available: true, api: 'CUDA' as const, device: 'GeForce RTX 3060', reason: null};
+const BOTH_AVAILABLE = {available: true, reason: null};
 
 describe('ExecutionStep', () =>
 {
   it('sin GPU solo CPU es elegible y GPU muestra el motivo', () =>
   {
     renderExecution(makeAppState());
-    const gpu = screen.getByRole('radio', {name: /GPU/});
+    const gpu = screen.getByRole('radio', {name: /^GPU/});
     expect(gpu).toBeDisabled();
     expect(gpu).toHaveTextContent('no se detectó una GPU compatible');
     fireEvent.click(gpu);
     expect(screen.getByTestId('mode')).toHaveTextContent('cpu');
-    expect(screen.getByRole('radio', {name: /CPU/})).toBeEnabled();
+    expect(screen.getByRole('radio', {name: /^CPU/})).toBeEnabled();
     expect(screen.getByRole('button', {name: 'Generar mosaico'})).toBeEnabled();
   });
 
   it('con CUDA la opción dice "GPU — CUDA (GeForce RTX 3060)" y se puede elegir', () =>
   {
-    renderExecution(makeAppState({execution: {cpu: {available: true, device: null}, gpu: CUDA_GPU}}));
+    renderExecution(makeAppState({execution: {cpu: {available: true, device: null}, gpu: CUDA_GPU, both: BOTH_AVAILABLE}}));
     const gpu = screen.getByRole('radio', {name: /GPU — CUDA \(GeForce RTX 3060\)/});
     fireEvent.click(gpu);
     expect(screen.getByTestId('mode')).toHaveTextContent('gpu');
+  });
+
+  it('sin GPU "Ambas" no es elegible y muestra el motivo', () =>
+  {
+    renderExecution(makeAppState());
+    const both = screen.getByRole('radio', {name: /Ambas \(CPU y GPU\)/});
+    expect(both).toBeDisabled();
+    expect(both).toHaveTextContent('no se detectó una GPU compatible');
+    fireEvent.click(both);
+    expect(screen.getByTestId('mode')).toHaveTextContent('cpu');
+  });
+
+  it('con GPU "Ambas" se puede elegir y pide confirmación como CPU', () =>
+  {
+    const calibration = {matching_ns_per_pair: 10000, prepare_ns_per_pixel: 1, compose_ns_per_pixel: 1};
+    const execution = {cpu: {available: true, device: null}, gpu: CUDA_GPU, both: BOTH_AVAILABLE};
+    renderExecution(makeAppState({execution, calibration}));
+    const both = screen.getByRole('radio', {name: /Ambas/});
+    fireEvent.click(both);
+    expect(screen.getByTestId('mode')).toHaveTextContent('both');
+    expect(both).toHaveTextContent(/CPU: tiempo estimado/);
+    fireEvent.click(screen.getByRole('button', {name: 'Generar mosaico'}));
+    expect(screen.getByRole('alertdialog', {name: 'Confirmar trabajo largo'})).toBeInTheDocument();
   });
 
   it('con OpenCL indica la API y el dispositivo', () =>

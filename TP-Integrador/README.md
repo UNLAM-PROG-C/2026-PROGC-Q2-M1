@@ -2,7 +2,128 @@
 
 Un fotomosaico arma una imagen objetivo con una grilla de imágenes chicas (teselas): para cada celda se elige la tesela que más se le parece. El objetivo del TP es **didáctico**: resolver exactamente el mismo problema en paralelo en GPU (CUDA y OpenCL) y secuencialmente en CPU, y mostrar la diferencia de tiempos.
 
-Estado actual (cambio 2 de 5, `agregar-backends-gpu`): carga común de imágenes, definición del algoritmo, contrato común de backends, **backend CPU secuencial** y **backends GPU CUDA y OpenCL** con kernels propios, más la detección de los backends disponibles. El worker, la interfaz web, el modo comparación y el benchmark llegan en los cambios siguientes (ver `openspec/changes/`).
+Estado actual (cambio 3 de 5, `agregar-worker-e-interfaz-web`): carga común de imágenes, definición del algoritmo, contrato común de backends, **backend CPU secuencial**, **backends GPU CUDA y OpenCL** con kernels propios, detección de backends y una **aplicación local**: un proceso worker dueño de los contextos de GPU, un proceso web (FastAPI) y una interfaz React con un stepper de tres pasos. El modo comparación (CPU y GPU a la vez) y el benchmark llegan en los cambios siguientes (ver `openspec/changes/`).
+
+## Levantar la aplicación
+
+### Con el script (recomendado)
+
+Desde `TP-Integrador/`:
+
+```bash
+./start.sh                # macOS / Linux
+```
+
+```powershell
+.\start.ps1              # Windows (PowerShell)
+```
+
+Opciones (las dos sintaxis valen en ambos scripts):
+
+| Opción | Qué hace |
+| --- | --- |
+| `--cpu-only` (`-CpuOnly`) | No instala ninguna biblioteca de GPU: la aplicación queda solo con CPU. |
+| `--reinstall` (`-Reinstall`) | Ignora las huellas guardadas: reinstala las dependencias de Python, reintenta la biblioteca de GPU y vuelve a correr `npm ci`. |
+| `--help` | Muestra la ayuda. |
+
+Qué hace y dónde instala (cada paso se saltea si ya está hecho):
+
+1. Verifica Python ≥ 3.11 y crea `TP-Integrador/.venv` si no existe. **Todo** se instala dentro de ese venv; nada va al Python del sistema.
+2. Instala `backend/requirements.txt` si cambió desde la última vez (la huella queda en `.venv/.mosaic-stamp`).
+3. Biblioteca de GPU: si `nvidia-smi` responde, `requirements-cuda.txt` (PyCUDA); si no hay NVIDIA o PyCUDA no compila (falta el CUDA Toolkit), `requirements-opencl.txt` (PyOpenCL). Una falla es solo una advertencia: la aplicación arranca con CPU. No se reintenta en cada arranque; para reintentar (por ejemplo, después de instalar el CUDA Toolkit) se usa `--reinstall`.
+4. Node.js: usa el `node` del `PATH` si es ≥ 20.19; si no, instala `nodeenv` y Node LTS **dentro del venv**. Corre `npm ci` en `frontend/` si falta `node_modules` o cambió `package-lock.json`.
+5. Crea `backend/.env` y `frontend/.env` a partir de sus `env.example` si no existen.
+6. Levanta el backend, espera a que `/api/state` responda, levanta el frontend e imprime la URL (por defecto `http://127.0.0.1:5173`). **Ctrl+C** detiene los dos sin dejar procesos huérfanos.
+
+La primera vez necesita internet (pip y npm); después la aplicación funciona sin conexión: no usa CDN y la tipografía viene instalada con npm.
+
+### Backend y frontend por separado
+
+Backend (desde `TP-Integrador/backend/`, con el venv ya creado como en "Instalación"):
+
+```powershell
+..\.venv\Scripts\python.exe -m app.main     # Windows
+```
+
+```bash
+../.venv/bin/python -m app.main            # Linux / macOS (o: make run)
+```
+
+Escucha en `http://127.0.0.1:8000`. No necesita ningún archivo del frontend: la API se puede probar con `curl` (por ejemplo `curl http://127.0.0.1:8000/api/state`). Ctrl+C lo apaga de forma ordenada: el proceso web le pide al worker que termine, el worker cierra el pool de decodificación y libera los contextos de GPU, y si no termina en `MOSAIC_SHUTDOWN_TIMEOUT_S` se lo termina a la fuerza. Al arrancar, el worker detecta y precalienta los backends (compila los kernels y Numba): la interfaz habilita la ejecución recién cuando termina (unos segundos).
+
+Frontend (desde `TP-Integrador/frontend/`, con Node ≥ 20.19):
+
+```bash
+npm ci          # una vez
+npm run dev     # servidor de Vite en http://127.0.0.1:5173
+npm run lint    # ESLint (Google TS style, Allman) + stylelint (sin colores literales fuera de tokens.css)
+npm test        # Vitest
+npm run build   # chequeo de tipos + build de producción (no hace falta para usar la aplicación)
+```
+
+### Variables de entorno
+
+Ninguna es obligatoria. Cada carpeta tiene su `env.example`; se copia a `.env` (que no se versiona) y se edita. Las del backend también se pueden exportar en la terminal, y tienen prioridad sobre el `.env`.
+
+`backend/env.example`:
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `MOSAIC_HOST` | `127.0.0.1` | Interfaz del proceso web. Otro valor expone la aplicación a la red. |
+| `MOSAIC_PORT` | `8000` | Puerto del proceso web. |
+| `MOSAIC_FRONTEND_ORIGIN` | `http://127.0.0.1:5173` | Único origen aceptado por CORS y por el WebSocket. |
+| `MOSAIC_TEMP_DIR` | `<temp del sistema>/fotomosaico` | Subidas y resultados; sus carpetas `tiles/`, `targets/` y `jobs/` se vacían al arrancar y al apagar. |
+| `MOSAIC_MAX_UPLOAD_MB` | `2048` | Tamaño máximo de una subida y de lo descomprimido de un zip (413 si se supera). |
+| `MOSAIC_MAX_ZIP_ENTRIES` | `20000` | Archivos máximos de un lote. |
+| `MOSAIC_MAX_OUTPUT_PIXELS` | `150000000` | Píxeles máximos de la imagen final. |
+| `MOSAIC_PREVIEW_MAX_SIDE` | `2048` | Lado mayor de la vista previa del resultado. |
+| `MOSAIC_TILE_SAMPLE_COUNT` | `12` | Miniaturas del lote que muestra el paso 1. |
+| `MOSAIC_CPU_CONFIRM_SECONDS` | `60` | Si la estimación de CPU lo supera, se pide confirmación. |
+| `MOSAIC_DECODE_PROCESSES` | `0` | Procesos del pool de decodificación (0 = uno por núcleo). |
+| `MOSAIC_SHUTDOWN_TIMEOUT_S` | `15` | Espera al worker al apagar antes de terminarlo a la fuerza. |
+| `NUMBA_LOOP_VECTORIZE`, `NUMBA_SLP_VECTORIZE` | `0` | SIMD de Numba en el backend CPU (ver más abajo). |
+| `GPU_MEMORY_FRACTION`, `OPENCL_MEMORY_FRACTION`, `OPENCL_DEVICE`, `CUDA_HOST_COMPILER_DIR`, `CUDA_NVCC_OPTIONS` | ver `env.example` | Backends GPU (ver "Instalación de los backends GPU"). |
+
+`frontend/env.example`:
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `VITE_BACKEND_URL` | `http://127.0.0.1:8000` | URL del backend; tiene que coincidir con `MOSAIC_HOST` y `MOSAIC_PORT`. |
+| `FRONTEND_PORT` | `5173` | Puerto del servidor de Vite (escucha solo en `127.0.0.1`); el origen resultante tiene que coincidir con `MOSAIC_FRONTEND_ORIGIN`. |
+
+### Recorrido por la interfaz
+
+Es una sola pantalla: arriba, el stepper (en pantallas angostas se compacta a "Paso N de 3 · Nombre"); no hay menú ni barra lateral.
+
+1. **Imágenes.** Se elige el lote de teselas (varias imágenes JPEG, PNG o WebP, o un único `.zip`, que puede tener carpetas) y la imagen objetivo. Cada una se sube apenas se elige, con barra de progreso; se ve el resumen ("200 teselas · 4 archivos ignorados"), una muestra de miniaturas y la miniatura del objetivo. Los archivos que no son imágenes (y los `__MACOSX/._*`) se ignoran; las entradas de zip con rutas peligrosas se rechazan.
+2. **Parámetros.** Columnas de la grilla, resolución de cada tesela (16, 32 o 64 px), opacidad de las teselas (0–100 %, el `alpha` del algoritmo) y semilla; cada uno tiene un "?" con una explicación. Abajo se recalcula la información del problema: N, M (filas × columnas), M·N y el tamaño de la imagen final. Si la imagen final supera el límite, no se puede avanzar. `k` no se muestra: el servidor usa `min(5, N)`.
+3. **Ejecución.** "CPU" o "GPU — <API> (<placa>)": la API (CUDA u OpenCL) la elige el sistema según el hardware; sin GPU la opción aparece deshabilitada con el motivo. Con CPU se muestra el tiempo estimado (calibrado al arrancar el worker) y, si supera el umbral, se pide confirmación.
+4. **Progreso.** Una barra por etapa (carga común, preparación de teselas, descriptores del objetivo, matching + top-k, composición y guardado), en vivo por WebSocket. Si se recarga la página, se recupera el trabajo en curso. Mientras dura, ninguna pestaña puede lanzar otro trabajo.
+5. **Resultado.** El mosaico sobre un bloque oscuro, con zoom (rueda o botones) y arrastre; "Descargar" en PNG o JPEG con la resolución completa; "Ver estadísticas" con la tabla de tiempos por etapa (las transferencias dicen "no aplica" en CPU) y "Volver a empezar", que regresa al paso 1 con el lote y el objetivo ya cargados (y los últimos parámetros): se puede cambiar solo uno de los dos, y si no se toca el lote la carga común se reutiliza ("reutilizada" en las estadísticas).
+
+Ejemplo real en la máquina de desarrollo (RTX 2080 SUPER, Ryzen), 8.000 teselas, 400 × 300 celdas (960 millones de comparaciones), `tile_px` = 16: CPU 65,97 s en total (matching 64,95 s; estimación previa "~1 min"), GPU (CUDA) 1,19 s con la carga común reutilizada.
+
+## Arquitectura de procesos
+
+```
+start.sh / start.ps1
+ ├─ backend: python -m app.main  (uvicorn, un solo proceso, sin --reload)
+ │   ├─ proceso web (FastAPI): subidas, validación, estado, WebSocket. No hace cómputo.
+ │   │   ├─ hilo lector de event_q ──call_soon_threadsafe──▶ event loop ──▶ ProgressHub ──▶ pestañas
+ │   │   └─ hilo monitor del worker (process.sentinel): si muere, "el worker se detuvo inesperadamente" y se relanza
+ │   └─ proceso worker (spawn): único dueño de los contextos CUDA/OpenCL
+ │       ├─ hilo de órdenes: lee command_q, rechaza un segundo RunJob
+ │       ├─ hilo de trabajo: detect_and_warmup → calibración CPU → JobRunner (un trabajo a la vez)
+ │       └─ pool de decodificación (spawn, N procesos) → memoria compartida
+ └─ frontend: npm run dev (servidor de Vite; solo sirve la interfaz)
+```
+
+- Por las colas viajan solo dataclasses chicas (`app/worker/messages.py`): ids, rutas, parámetros, progreso, tiempos. Nunca arrays: el worker guarda PNG, JPEG y la vista previa en `MOSAIC_TEMP_DIR/jobs/<id>/<backend>/` (fuera de la medición) y el proceso web los sirve por ruta.
+- Todos los procesos hijos se crean con `spawn` (CUDA no sobrevive a un `fork`), por eso `app/main.py` arranca uvicorn dentro de `if __name__ == "__main__":`.
+- Ctrl+C llega a todo el grupo de procesos (también en Windows): el worker y su pool ignoran `SIGINT`/`SIGBREAK` y solo terminan con la orden `Shutdown` (o con `terminate()` pasado el tiempo límite).
+- El backend conserva solo el último trabajo: si una pestaña muestra un resultado y otra lanza un trabajo nuevo, la primera avisa que ese resultado ya no está disponible.
+
+API del proceso web: `GET /api/state`, `POST /api/tiles` (multipart `files` o `zip`), `GET /api/tiles/{id}`, `GET /api/tiles/{id}/samples/{i}`, `POST /api/targets` (multipart `file`), `GET /api/targets/{id}/image`, `POST /api/jobs` (JSON; 409 si hay un trabajo en curso), `GET /api/jobs/{id}/{backend}/{preview|png|jpg}` y `WS /ws`. El contrato JSON está en `frontend/src/api/types.ts`.
 
 ## Estructura
 
@@ -10,32 +131,40 @@ Estado actual (cambio 2 de 5, `agregar-backends-gpu`): carga común de imágenes
 TP-Integrador/
 ├── README.md
 ├── .venv/                  # entorno virtual del proyecto (no se versiona)
-├── backend/                # Python: núcleo, carga, backends (y más adelante worker y web)
-│   ├── Makefile            # build / test / lint / format / clean
+├── start.sh / start.ps1    # instalan lo que falte y levantan backend y frontend
+├── backend/                # Python: núcleo, carga, backends, worker y proceso web
+│   ├── Makefile            # build / test / lint / format / run / clean
 │   ├── pyproject.toml      # configuración de ruff (2 espacios) y pytest
-│   ├── requirements.txt    # dependencias base: numpy, numba, pillow
+│   ├── requirements.txt    # base: numpy, numba, pillow, fastapi, uvicorn, python-multipart, python-dotenv
 │   ├── requirements-cuda.txt   # base + pycuda (GPU NVIDIA)
 │   ├── requirements-opencl.txt # base + pyopencl (GPU AMD, NVIDIA, Intel o Apple)
-│   ├── requirements-dev.txt # pytest, ruff
+│   ├── requirements-dev.txt # pytest, ruff, httpx
 │   ├── env.example         # plantilla de variables de entorno
 │   ├── kernels/
 │   │   ├── mosaic.cu       # kernels CUDA C
 │   │   └── mosaic.cl       # los mismos kernels en OpenCL C
 │   ├── app/
+│   │   ├── main.py         # punto de entrada: python -m app.main (uvicorn)
+│   │   ├── config.py       # variables MOSAIC_* y .env
+│   │   ├── worker/         # proceso worker: mensajes, JobRunner, guardado de resultados
+│   │   ├── web/            # proceso web: API, WebSocket (ProgressHub), subidas, trabajos, WorkerClient
 │   │   ├── core/           # constantes, parámetros, color, contrato de backend, tiempos, choice
 │   │   ├── loading/        # decodificación en pool de procesos, objetivo, cache de la última carga
 │   │   └── backends/
-│   │       ├── cpu/        # backend CPU secuencial (Numba, un hilo, sin SIMD)
+│   │       ├── cpu/        # backend CPU secuencial (Numba, un hilo, sin SIMD) y su calibración
 │   │       ├── cuda/       # backend CUDA (PyCUDA): backend, eventos, búsqueda de cl.exe en Windows
 │   │       ├── opencl/     # backend OpenCL (PyOpenCL): backend, profiling, selección de GPU
 │   │       ├── gpu_base.py # pasos comunes de CUDA y OpenCL (mismos kernels, grillas y orden)
 │   │       ├── kernel_build.py # constantes de Python → -D de los kernels
 │   │       └── registry.py # detección, estado, selección y GPU preferida
 │   └── tests/
-└── frontend/               # React + Vite + TypeScript (llega en el cambio 3)
+└── frontend/               # React + Vite + TypeScript
+    ├── DESIGN.md           # design system de referencia
+    ├── env.example         # VITE_BACKEND_URL, FRONTEND_PORT
+    └── src/                # api/ (cliente y WebSocket), wizard/ (stepper), steps/, run/, result/, components/, styles/
 ```
 
-`backend/` y `frontend/` están desacoplados: cada uno tiene sus dependencias, sus tests y su `env.example`, y se comunicarán solo por HTTP y WebSocket.
+`backend/` y `frontend/` están desacoplados: cada uno tiene sus dependencias, sus tests y su `env.example`, y se comunican solo por HTTP y WebSocket.
 
 ## Instalación (solo CPU)
 
@@ -55,7 +184,7 @@ py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r backend\requirements.txt -r backend\requirements-dev.txt
 ```
 
-Las variables de entorno del backend están documentadas en `backend/env.example`. Ninguna es obligatoria: el backend CPU fija por su cuenta las de Numba (ver más abajo) y las de GPU tienen valores por defecto. Se leen al importar `app/core/constants.py`, así que hay que exportarlas antes de arrancar (la carga del `.env` llega en el cambio 3).
+Las variables de entorno del backend están documentadas en `backend/env.example`. Ninguna es obligatoria: el backend CPU fija por su cuenta las de Numba (ver más abajo) y las de GPU tienen valores por defecto. Las de GPU se leen al importar `app/core/constants.py`; `python -m app.main` carga `backend/.env` antes de lanzar el worker, así que alcanza con ponerlas ahí.
 
 ## Instalación de los backends GPU (opcional)
 
@@ -119,6 +248,7 @@ make test    # pytest
 make lint    # ruff check + ruff format --check
 make lint-kernels  # clang-format --dry-run --Werror sobre kernels/ (Allman, .clang-format del repo)
 make backends      # diagnóstico de backends
+make run     # levanta el backend (proceso web + worker)
 make format  # aplica el formato
 make clean   # borra cachés
 ```
@@ -130,6 +260,7 @@ Sin `make` (por ejemplo en Windows), los equivalentes desde `TP-Integrador/backe
 ..\.venv\Scripts\python.exe -m pytest                    # test
 ..\.venv\Scripts\python.exe -m ruff check .              # lint
 ..\.venv\Scripts\python.exe -m ruff format --check .     # lint (formato)
+..\.venv\Scripts\python.exe -m app.main                  # run
 ```
 
 En Linux/macOS, reemplazar `..\.venv\Scripts\python.exe` por `../.venv/bin/python`.
@@ -251,6 +382,10 @@ En la práctica, en la máquina de desarrollo, CUDA y OpenCL coinciden con CPU e
 | Template Method | `BaseBackend.run()` en `app/core/backend.py`, y un segundo nivel en `GpuBackend` (`app/backends/gpu_base.py`) | Fija la secuencia de etapas, el cronometraje y el progreso; cada backend implementa solo los pasos, así todos miden exactamente las mismas etapas. `GpuBackend` escribe una sola vez qué kernels se lanzan y con qué grillas; CUDA y OpenCL solo implementan las primitivas de su API. |
 | Observer | Callback `on_progress` | El backend no conoce a quién le informa el progreso (un test, el worker, el benchmark). En GPU el aviso se difiere (`DeferredProgressReporter`) hasta que el dispositivo alcanza el marcador encolado. |
 | Factory | `app/backends/registry.py` | Una fábrica por backend importa PyCUDA/PyOpenCL recién al crearlo: importar el proyecto nunca falla sin GPU, y una falla de inicialización queda aislada en el estado de ese backend. |
-| Productor/Consumidor | `app/loading/tile_loader.py` | El proceso padre reparte tareas (ruta, índice) y los procesos del pool las consumen escribiendo en memoria compartida. |
+| Productor/Consumidor | `app/loading/tile_loader.py`; colas `command_q`/`event_q` entre web y worker; cola interna del worker | El proceso padre reparte tareas (ruta, índice) y los procesos del pool las consumen escribiendo en memoria compartida. La web produce órdenes que consume el worker y el worker produce eventos que consume el hilo lector de la web; dentro del worker, el hilo de órdenes le pasa los trabajos aceptados al hilo de trabajo. |
+| Command | `RunJob` y `Shutdown` en `app/worker/messages.py` | Cada orden es un objeto autocontenido y serializable: el worker la ejecuta sin conocer al proceso web, y `RunJob` ya lleva una lista de backends para que el modo comparación no cambie el protocolo. |
+| Observer (eventos) | `ProgressHub` (`app/web/hub.py`); `api/socket.ts` + `useServerState` en el frontend | Cada evento del worker se retransmite a todas las pestañas conectadas; una pestaña nueva recibe primero el estado completo y después los eventos. El frontend se suscribe al WebSocket y aplica cada evento sobre su snapshot. |
+| Facade | `WorkerClient` (`app/web/worker_client.py`); `api/client.ts` | El resto del proceso web solo ve `start`/`send`/`stop`: proceso, colas, hilos, monitor y relanzamiento quedan ocultos. Del lado del frontend, ningún componente arma URLs ni maneja fetch/XHR. |
+| State | `wizard/wizardReducer.ts` | El stepper es una máquina de estados (`images → params → execution → running → result`) con todas las transiciones en un reducer puro, testeado sin DOM. |
 
-No se usa Singleton: el único recurso global (el contexto de GPU) lo crea explícitamente el backend CUDA (`make_context`, sin `pycuda.autoinit`) en el proceso que lo usa, lo activa solo durante cada operación y lo libera en `close()`; el registro cierra todos los backends al terminar. En el cambio 3 ese proceso es el worker.
+No se usa Singleton: el único recurso global (el contexto de GPU) lo crea explícitamente el backend CUDA (`make_context`, sin `pycuda.autoinit`) en el proceso que lo usa, lo activa solo durante cada operación y lo libera en `close()`; el registro cierra todos los backends al terminar. Ese proceso es el worker: el proceso web nunca importa PyCUDA ni PyOpenCL.

@@ -16,10 +16,11 @@ interface DownloadMenuProps
 export function DownloadMenu({jobId, backend}: DownloadMenuProps): JSX.Element
 {
   const [open, setOpen] = useState(false);
+  const optionsId = `download-options-${backend}`;
   return (
     <div className="download-menu">
-      <PillButton aria-expanded={open} aria-controls="download-options" onClick={() => setOpen(!open)}>Descargar</PillButton>
-      <ul id="download-options" className="download-menu__options" hidden={!open}>
+      <PillButton aria-expanded={open} aria-controls={optionsId} onClick={() => setOpen(!open)}>Descargar</PillButton>
+      <ul id={optionsId} className="download-menu__options" hidden={!open}>
         <li><a className="text-link" href={resultUrl(jobId, backend, 'png')} download="mosaico.png">PNG (sin pérdida)</a></li>
         <li><a className="text-link" href={resultUrl(jobId, backend, 'jpg')} download="mosaico.jpg">JPEG (más liviano)</a></li>
       </ul>

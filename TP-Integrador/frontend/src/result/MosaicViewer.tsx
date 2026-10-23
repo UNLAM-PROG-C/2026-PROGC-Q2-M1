@@ -1,10 +1,12 @@
 // Visor del mosaico: muestra la vista previa reducida y permite acercar con la
 // rueda (o los botones) y arrastrar. Pasado cierto zoom, si el mosaico no es
 // gigante, carga el PNG completo en segundo plano y lo reemplaza al terminar
-// (spec "Resultado con zoom").
+// (spec "Resultado con zoom"). Con `zoom` comparte la vista con otro visor
+// (comparación del cambio 4); sin él usa un controlador propio.
 
 import {useEffect, useRef, useState} from 'react';
 import {needsFullImage, ZOOM_STEP} from './zoom';
+import {ZoomController} from './zoomController';
 import {useZoomPan} from './useZoomPan';
 
 interface MosaicViewerProps
@@ -14,6 +16,7 @@ interface MosaicViewerProps
   width: number;
   height: number;
   alt: string;
+  zoom?: ZoomController;
 }
 
 /** Cambia a la imagen completa cuando el zoom lo pide; la precarga para no mostrar un hueco. */
@@ -33,11 +36,12 @@ function useProgressiveSource(previewUrl: string, fullUrl: string, wantFull: boo
   return source;
 }
 
-export function MosaicViewer({previewUrl, fullUrl, width, height, alt}: MosaicViewerProps): JSX.Element
+export function MosaicViewer({previewUrl, fullUrl, width, height, alt, zoom}: MosaicViewerProps): JSX.Element
 {
   const container = useRef<HTMLDivElement>(null);
   const image = useRef<HTMLImageElement>(null);
-  const {view, zoomBy, reset, pointerHandlers} = useZoomPan(container);
+  const [ownZoom] = useState(() => new ZoomController());
+  const {view, zoomBy, reset, pointerHandlers} = useZoomPan(container, zoom ?? ownZoom);
   const previewWidth = image.current?.naturalWidth || width;
   const wantFull = needsFullImage(view.scale, image.current?.clientWidth ?? 0, previewWidth, width * height);
   const source = useProgressiveSource(previewUrl, fullUrl, wantFull);

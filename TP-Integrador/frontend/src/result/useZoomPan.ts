@@ -1,8 +1,10 @@
 // Hook del visor: zoom con la rueda (sobre el cursor) y arrastre con el puntero.
 // La rueda se escucha con `passive: false` para poder evitar el scroll de la página.
+// La vista vive en un `ZoomController`: si dos visores comparten el mismo, se mueven juntos.
 
-import {useEffect, useRef, useState, type PointerEvent, type RefObject} from 'react';
+import {useEffect, useRef, useSyncExternalStore, type PointerEvent, type RefObject} from 'react';
 import {FIT_VIEW, panBy, zoomAt, ZOOM_STEP, type Point, type ZoomView} from './zoom';
+import type {ZoomController} from './zoomController';
 
 export interface ZoomPan
 {
@@ -37,9 +39,10 @@ function useWheelZoom(container: RefObject<HTMLElement | null>, setView: (update
   }, [container, setView]);
 }
 
-export function useZoomPan(container: RefObject<HTMLElement | null>): ZoomPan
+export function useZoomPan(container: RefObject<HTMLElement | null>, controller: ZoomController): ZoomPan
 {
-  const [view, setView] = useState<ZoomView>(FIT_VIEW);
+  const view = useSyncExternalStore(controller.subscribe, controller.getView);
+  const setView = controller.update;
   const drag = useRef<Point | null>(null);
   useWheelZoom(container, setView);
 
@@ -58,5 +61,5 @@ export function useZoomPan(container: RefObject<HTMLElement | null>): ZoomPan
     }
   };
   const zoomBy = (factor: number): void => setView((current) => zoomAt(current, factor, centerOf(container.current)));
-  return {view, zoomBy, reset: () => setView(FIT_VIEW), pointerHandlers: {onPointerDown, onPointerMove, onPointerUp: () => (drag.current = null)}};
+  return {view, zoomBy, reset: () => setView(() => FIT_VIEW), pointerHandlers: {onPointerDown, onPointerMove, onPointerUp: () => (drag.current = null)}};
 }

@@ -1,16 +1,16 @@
-// Tabla de tiempos de un backend, con números tabulares (design D12).
+// Tabla de tiempos con números tabulares (design D12): una columna por backend
+// y, en una comparación, una de speedup (cambio 4).
 
-import type {BackendResult, LoadInfo} from '../api/types';
-import {timingRows} from './timings';
+import type {TableRow} from './timings';
 
 interface TimingsTableProps
 {
-  load: LoadInfo | null;
-  result: BackendResult;
   caption: string;
+  columns: readonly string[];
+  rows: readonly TableRow[];
 }
 
-export function TimingsTable({load, result, caption}: TimingsTableProps): JSX.Element
+export function TimingsTable({caption, columns, rows}: TimingsTableProps): JSX.Element
 {
   return (
     <table className="timings-table">
@@ -18,14 +18,14 @@ export function TimingsTable({load, result, caption}: TimingsTableProps): JSX.El
       <thead>
         <tr>
           <th scope="col">Etapa</th>
-          <th scope="col">Tiempo</th>
+          {columns.map((column) => <th key={column} scope="col">{column}</th>)}
         </tr>
       </thead>
       <tbody>
-        {timingRows(load, result).map((row) => (
+        {rows.map((row) => (
           <tr key={row.label}>
             <th scope="row">{row.label}</th>
-            <td>{row.value}</td>
+            {row.values.map((value, index) => <td key={columns[index]}>{value}</td>)}
           </tr>
         ))}
       </tbody>

@@ -1,8 +1,10 @@
 // Filas de la tabla de tiempos (spec "Estadísticas a pedido"). Lo que no
 // aplica al backend (por ejemplo las transferencias en CPU) dice "no aplica".
+// En una comparación (cambio 4) cada fila lleva CPU, GPU y el speedup.
 
-import type {BackendResult, LoadInfo} from '../api/types';
+import type {BackendResult, LoadInfo, StageTimings} from '../api/types';
 import {formatMs} from '../common/format';
+import {NO_VALUE, speedupText} from './speedup';
 
 export const NOT_APPLICABLE = 'no aplica';
 
@@ -10,6 +12,13 @@ export interface TimingRow
 {
   label: string;
   value: string;
+}
+
+/** Fila de `TimingsTable`: un valor por columna. */
+export interface TableRow
+{
+  label: string;
+  values: string[];
 }
 
 function msOrNotApplicable(value: number | null | undefined): string
@@ -42,4 +51,30 @@ export function timingRows(load: LoadInfo | null, result: BackendResult): Timing
     {label: 'Total del backend', value: formatMs(timings.total_ms)},
     {label: 'Inicialización del backend', value: msOrNotApplicable(result.init_ms)},
   ];
+}
+
+export function singleTableRows(load: LoadInfo | null, result: BackendResult): TableRow[]
+{
+  return timingRows(load, result).map((row) => ({label: row.label, values: [row.value]}));
+}
+
+/** Etapas en las que se calcula el speedup (las de cómputo y el total). */
+const COMPARED_KEYS: Readonly<Record<string, keyof StageTimings>> = {
+  'Preparación de teselas': 'prepare_tiles_ms',
+  'Descriptores del objetivo': 'target_descriptors_ms',
+  'Matching + top-k': 'matching_ms',
+  'Composición': 'compose_ms',
+  'Total del backend': 'total_ms',
+};
+
+/** Filas CPU | GPU | speedup; las que no se comparan (carga, transferencias, inicialización) dicen "—". */
+export function comparisonRows(load: LoadInfo | null, cpu: BackendResult, gpu: BackendResult): TableRow[]
+{
+  const gpuRows = timingRows(load, gpu);
+  return timingRows(load, cpu).map((row, index) =>
+  {
+    const key = COMPARED_KEYS[row.label];
+    const ratio = key ? speedupText(cpu.timings[key], gpu.timings[key]) : NO_VALUE;
+    return {label: row.label, values: [row.value, gpuRows[index].value, ratio]};
+  });
 }

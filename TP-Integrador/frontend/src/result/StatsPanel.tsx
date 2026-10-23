@@ -1,11 +1,14 @@
 // Panel de estadísticas: solo aparece al apretar "Ver estadísticas", en un
-// tile parchment debajo del resultado. El cambio 4 le agrega la vista comparativa.
+// tile parchment debajo del resultado. Si el trabajo se ejecutó con "Ambas"
+// muestra la vista comparativa (cambio 4).
 
 import type {JobSnapshot} from '../api/types';
 import {formatInt} from '../common/format';
 import {StepTile} from '../components/StepTile';
+import {ComparisonStats} from './ComparisonStats';
 import {backendLabel} from './labels';
 import {TimingsTable} from './TimingsTable';
+import {singleTableRows} from './timings';
 
 interface StatsPanelProps
 {
@@ -27,9 +30,11 @@ export function StatsPanel({job}: StatsPanelProps): JSX.Element
 {
   return (
     <StepTile title="Estadísticas" tone="parchment" lead={loadSummary(job)}>
-      {job.results.map((result) => (
-        <TimingsTable key={result.backend} load={job.load} result={result} caption={backendLabel(result.backend, result.device)} />
-      ))}
+      {job.mode === 'both'
+        ? <ComparisonStats job={job} />
+        : job.results.map((result) => (
+          <TimingsTable key={result.backend} caption={backendLabel(result.backend, result.device)} columns={['Tiempo']} rows={singleTableRows(job.load, result)} />
+        ))}
     </StepTile>
   );
 }

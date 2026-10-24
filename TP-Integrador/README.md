@@ -2,7 +2,7 @@
 
 Un fotomosaico arma una imagen objetivo con una grilla de imágenes chicas (teselas): para cada celda se elige la tesela que más se le parece. El objetivo del TP es **didáctico**: resolver exactamente el mismo problema en paralelo en GPU (CUDA y OpenCL) y secuencialmente en CPU, y mostrar la diferencia de tiempos.
 
-Estado actual (cambio 3 de 5, `agregar-worker-e-interfaz-web`): carga común de imágenes, definición del algoritmo, contrato común de backends, **backend CPU secuencial**, **backends GPU CUDA y OpenCL** con kernels propios, detección de backends y una **aplicación local**: un proceso worker dueño de los contextos de GPU, un proceso web (FastAPI) y una interfaz React con un stepper de tres pasos. El modo comparación (CPU y GPU a la vez) y el benchmark llegan en los cambios siguientes (ver `openspec/changes/`).
+Qué incluye (los cinco cambios de `openspec/`, ya implementados): carga común de imágenes, definición del algoritmo, contrato común de backends, **backend CPU secuencial**, **backends GPU CUDA y OpenCL** con kernels propios, detección de backends, una **aplicación local** (un proceso worker dueño de los contextos de GPU, un proceso web con FastAPI y una interfaz React con un stepper de tres pasos), el **modo comparación** "Ambas" (CPU y GPU sobre el mismo trabajo, con verificación) y un **benchmark** sin interfaz que mide cómo escala cada backend con el tamaño del problema (ver "Benchmark").
 
 ## Levantar la aplicación
 
@@ -114,11 +114,85 @@ La opción **"Ambas (CPU y GPU)"** del paso 3 ejecuta el mismo trabajo en la GPU
 - **Verificación.** Apenas termina cada backend, el worker toma una huella del resultado (`topk_idx` y un digest `blake2b` de 8 bytes por celda de la imagen) y libera la imagen; al final compara la de la GPU contra la de la CPU. Arriba de las estadísticas se ve "Resultados idénticos ✓" o, por ejemplo, "CUDA: 8 celdas difieren de CPU (diferencias de punto flotante en casi-empates)": una celda difiere si cambió su top-k o algún píxel de su bloque (ver "Precisión numérica esperada").
 - **Si la GPU falla** (por ejemplo, por memoria), la CPU se ejecuta igual: se muestra "GPU falló: <motivo>", solo el mosaico de la CPU y sus tiempos con el aviso "sin comparación".
 
-Comparar CUDA contra OpenCL sobre la misma placa no se hace desde la interfaz sino con `benchmark.py` (cambio 5).
+Comparar CUDA contra OpenCL sobre la misma placa no se hace desde la interfaz sino con `benchmark.py` (ver "Benchmark").
 
 Ejemplo real (RTX 2080 SUPER, Ryzen), 2.000 teselas, 400 × 300 celdas, `tile_px` = 32, carga común reutilizada: matching 16.277,9 ms en CPU contra 91,7 ms en CUDA (177×), total 17.579,5 ms contra 550,6 ms (32×), 8 de 120.000 celdas distintas:
 
 ![Estadísticas comparativas CPU vs. CUDA](docs/capturas/comparacion-estadisticas.png)
+
+## Benchmark
+
+El modo comparación muestra un trabajo puntual. `backend/benchmark.py` mide, sin la interfaz y con repeticiones, **cómo escala** cada backend con el tamaño del problema, incluido el caso en que la GPU no conviene. Desde `TP-Integrador/backend/`:
+
+```powershell
+..\.venv\Scripts\python.exe benchmark.py                        # Windows (o: make bench)
+$env:OPENCL_DEVICE = "NVIDIA"; ..\.venv\Scripts\python.exe benchmark.py   # OpenCL sobre la NVIDIA y no sobre la integrada
+```
+
+```bash
+../.venv/bin/python benchmark.py                                # Linux / macOS (o: make bench)
+../.venv/bin/python benchmark.py --backends cuda,cpu --n 100,1000 --m 1000 --repeats 5
+```
+
+| Opción | Por defecto | Qué hace |
+| --- | --- | --- |
+| `--backends` | `cuda,opencl,cpu` | Backends a medir. CUDA y OpenCL se miden **por separado** (en una NVIDIA, sobre la misma placa), cosa que la interfaz no hace. Solo se detectan y precalientan los pedidos. |
+| `--n` / `--m` | `100,1000,5000` / `1000,10000,40000` | Teselas y celdas: se miden todas las combinaciones N × M (9 por defecto). |
+| `--tile-px`, `--k`, `--alpha`, `--seed` | `32`, `5`, `1.0`, `0` | Parámetros del trabajo (`k` se recorta a N). `tile_px` es 32 y no 64: con M = 40.000 la salida de 64 px pesa ~490 MB por backend y se mediría sobre todo la copia D→H. |
+| `--repeats` | `3` | Repeticiones por medición, después del warmup. |
+| `--max-cpu-seconds` | `600` | Las combinaciones de CPU cuya estimación (la misma calibración que usa la interfaz) supere este valor no se ejecutan: figuran como "omitido (estimado X s)". |
+| `--out-dir` | `resultados` | Dónde se escriben `benchmark.md`, `benchmark.csv` y `benchmark.png` (`backend/resultados/` no se versiona). |
+
+Qué hace, en orden:
+
+1. Informa el estado de cada backend pedido y su tiempo de inicialización (`warmup()`: compilación de kernels y de Numba). En una máquina sin GPU, CUDA y OpenCL aparecen "no disponible (motivo)" y se mide solo la CPU.
+2. Calibra la CPU e imprime cuánto se estima que va a tardar su parte (y cuántas combinaciones se omiten).
+3. Recorre las combinaciones en orden creciente de M·N. Para cada una genera **datos sintéticos** reproducibles (`app/bench/synthetic.py`: teselas con un degradado entre dos colores y ruido suave, objetivo como suma de gaussianas de colores; la grilla del objetivo es la de M celdas más cercana a 4:3, por ejemplo 40.000 → 160 × 250) y un único `choice`, y ejecuta cada backend `--repeats` veces. Los backends corren **de a uno**, en el mismo proceso y sin worker: nada compite con la medición. La etapa común de carga no se mide (no se compara) y el contenido de las imágenes no cambia el tiempo (no hay ramas que dependan de los datos salvo las inserciones del top-k).
+4. De la primera repetición de cada backend toma la misma huella que el modo comparación (`topk_idx` y un digest por celda) y libera la imagen; al terminar la combinación compara contra CPU (o contra el primer backend, si CPU se omitió o no se pidió) y libera todo antes de la siguiente.
+5. Imprime y guarda el reporte: tabla de totales con **mediana (mínimo)** y speedup `CPU / GPU`, punto de cruce, verificación ("resultados idénticos en todas las combinaciones" o cuántas celdas difieren) y detalle por etapa. El CSV tiene una fila por repetición con todas las columnas de `StageTimings` (las que no aplican quedan vacías, no en cero) y una fila por cada combinación omitida. El gráfico es el total en función de M·N en escala log-log, con un marcador hueco en la posición estimada de lo omitido.
+
+Para que los números sean estables: notebook enchufada, otras aplicaciones cerradas y la misma configuración de energía entre corridas. Las GPUs varían su frecuencia (boost, temperatura) entre repeticiones: por eso se informan la mediana y el mínimo y no el promedio.
+
+### Resultados en la máquina de desarrollo
+
+Windows 11, RTX 2080 SUPER (CUDA y OpenCL sobre la misma placa, con `OPENCL_DEVICE=NVIDIA`), Ryzen (CPU secuencial: un hilo, sin SIMD), Python 3.13; corrida por defecto (`benchmark.py`, 3 repeticiones, `tile_px` = 32, k = 5). Tiempo total en ms, **mediana (mínimo)**; el speedup es `mediana CPU / mediana GPU` y el total de la GPU incluye las transferencias y el staging. Copiado de `backend/resultados/benchmark.md` (los mismos números que `benchmark.csv`):
+
+| N | M | M·N | CUDA [ms] | OpenCL [ms] | CPU secuencial [ms] | Speedup CUDA | Speedup OpenCL |
+|---|---|---|---|---|---|---|---|
+| 100 | 1.000 | 100.000 | 1.9 (1.9) | 2.4 (2.1) | 20.8 (20.5) | 10.94× | 8.70× |
+| 100 | 10.000 | 1.000.000 | 9.6 (9.1) | 8.5 (8.5) | 173.6 (173.6) | 18.14× | 20.32× |
+| 1.000 | 1.000 | 1.000.000 | 7.9 (7.7) | 7.7 (7.7) | 114.9 (114.3) | 14.48× | 14.88× |
+| 100 | 40.000 | 4.000.000 | 34.2 (33.8) | 31.7 (31.3) | 688.2 (684.3) | 20.14× | 21.74× |
+| 5.000 | 1.000 | 5.000.000 | 36.0 (36.0) | 36.5 (35.5) | 536.1 (534.3) | 14.87× | 14.70× |
+| 1.000 | 10.000 | 10.000.000 | 38.3 (37.3) | 49.0 (37.3) | 817.2 (815.4) | 21.32× | 16.66× |
+| 1.000 | 40.000 | 40.000.000 | 60.5 (55.5) | 58.6 (57.9) | 3159.0 (3145.7) | 52.25× | 53.92× |
+| 5.000 | 10.000 | 50.000.000 | 130.9 (68.0) | 62.9 (61.4) | 3722.8 (3690.4) | 28.43× | 59.19× |
+| 5.000 | 40.000 | 200.000.000 | 128.6 (128.5) | 199.2 (197.1) | 14168.7 (14101.1) | 110.18× | 71.13× |
+
+
+![Benchmark: tiempo total en función de M·N, log-log](docs/capturas/benchmark.png)
+
+Cómo leerlo:
+
+- **El matching domina en la CPU y crece con M·N**: de 6,8 ms (M·N = 10⁵) a 13,6 s (2·10⁸), casi proporcional. En la GPU el mismo matching pasa de 0,2 ms a 60 ms (CUDA): por eso el speedup crece con el tamaño, hasta **110×** con CUDA en la combinación más grande.
+- **En los tamaños chicos la GPU gana poco** (11× con M·N = 10⁵ contra 110× arriba) porque su total es casi todo **costo fijo**: copiar las entradas al dispositivo (H→D, que crece con N: `tiles_src` son 48 KB por tesela), copiar la imagen de vuelta (D→H, crece con M) y las copias de staging en el host, más el lanzamiento de siete kernels y las sincronizaciones. Con N = 5.000 y M = 1.000, por ejemplo, CUDA pasa 29,1 ms de sus 36 ms en transferencias y staging y solo 6,4 ms calculando.
+- **CUDA y OpenCL empatan** en casi todo, como se espera de los mismos kernels sobre la misma placa; difieren en cómo se reparte el tiempo de transferencia (OpenCL mapea buffers `ALLOC_HOST_PTR` y casi todo su costo aparece como staging) y en el matching más grande, donde CUDA es más rápido (59,8 contra 126,2 ms).
+- **Hay ruido**: en N = 5.000, M = 10.000, CUDA tuvo una repetición de 68 ms y otra de 131 ms (una transferencia H→D más lenta). Por eso se informan mediana y mínimo. La primera repetición de cada combinación es siempre más lenta en GPU (el staging crece y se vuelve a reservar memoria page-locked): queda en el CSV, y la mediana de tres la descarta.
+- **Verificación**: en 5 de las 9 combinaciones (todas con M ≥ 10.000), entre 1 y 12 celdas difieren de la CPU (casi-empates de punto flotante, ver "Precisión numérica esperada"); en las otras 4, ninguna.
+
+Con la grilla por defecto la GPU nunca pierde en esta máquina. Para ver el **punto de cruce** hay que bajar a problemas diminutos (`--n 10,100 --m 12,100,1000 --repeats 5`):
+
+| N | M | M·N | CUDA [ms] | OpenCL [ms] | CPU secuencial [ms] | Speedup CUDA | Speedup OpenCL |
+|---|---|---|---|---|---|---|---|
+| 10 | 12 | 120 | 0.5 (0.4) | 0.5 (0.5) | 0.5 (0.5) | 1.06× | 0.93× |
+| 10 | 100 | 1.000 | 0.5 (0.4) | 0.8 (0.7) | 1.5 (1.4) | 3.05× | 1.92× |
+| 100 | 12 | 1.200 | 1.0 (1.0) | 0.9 (0.9) | 3.7 (3.7) | 3.59× | 4.12× |
+| 10 | 1.000 | 10.000 | 1.3 (1.2) | 1.5 (1.5) | 11.2 (11.2) | 8.47× | 7.43× |
+| 100 | 100 | 10.000 | 1.0 (1.0) | 1.0 (1.0) | 5.2 (5.2) | 5.08× | 5.04× |
+| 100 | 1.000 | 100.000 | 2.0 (1.9) | 1.8 (1.7) | 20.5 (20.4) | 10.14× | 11.68× |
+
+
+Con 10 teselas y 12 celdas (120 pares) la CPU termina en medio milisegundo, lo mismo que tarda la GPU solo en copiar y lanzar: CUDA empata (1,06×) y OpenCL pierde (0,93×). En la Radeon integrada (OpenCL sin `OPENCL_DEVICE`) la diferencia es más clara: 0,8 ms contra 0,5 ms de la CPU (**0,63×**), y recién supera a la CPU a partir de M·N = 1.000. La conclusión es la que motiva el TP: la GPU conviene cuando hay suficiente trabajo para amortizar el costo fijo de mover los datos y lanzar los kernels; en esta placa eso ocurre desde unos pocos miles de pares celda-tesela, muy por debajo de cualquier mosaico real (una grilla de 100 × 75 con 500 teselas ya son 3,75 millones de pares).
 
 ## Arquitectura de procesos
 
@@ -151,9 +225,10 @@ TP-Integrador/
 ├── .venv/                  # entorno virtual del proyecto (no se versiona)
 ├── start.sh / start.ps1    # instalan lo que falte y levantan backend y frontend
 ├── backend/                # Python: núcleo, carga, backends, worker y proceso web
-│   ├── Makefile            # build / test / lint / format / run / clean
+│   ├── Makefile            # build / test / lint / format / backends / bench / run / clean
+│   ├── benchmark.py        # benchmark sin interfaz (tabla, CSV y gráfico)
 │   ├── pyproject.toml      # configuración de ruff (2 espacios) y pytest
-│   ├── requirements.txt    # base: numpy, numba, pillow, fastapi, uvicorn, python-multipart, python-dotenv
+│   ├── requirements.txt    # base: numpy, numba, pillow, fastapi, uvicorn, python-multipart, python-dotenv, matplotlib
 │   ├── requirements-cuda.txt   # base + pycuda (GPU NVIDIA)
 │   ├── requirements-opencl.txt # base + pyopencl (GPU AMD, NVIDIA, Intel o Apple)
 │   ├── requirements-dev.txt # pytest, ruff, httpx
@@ -168,6 +243,7 @@ TP-Integrador/
 │   │   ├── web/            # proceso web: API, WebSocket (ProgressHub), subidas, trabajos, WorkerClient
 │   │   ├── core/           # constantes, parámetros, color, contrato de backend, tiempos, choice, verificación
 │   │   ├── loading/        # decodificación en pool de procesos, objetivo, cache de la última carga
+│   │   ├── bench/          # benchmark: valores por defecto, datos sintéticos, bucle de medición y reporte
 │   │   └── backends/
 │   │       ├── cpu/        # backend CPU secuencial (Numba, un hilo, sin SIMD) y su calibración
 │   │       ├── cuda/       # backend CUDA (PyCUDA): backend, eventos, búsqueda de cl.exe en Windows
@@ -266,6 +342,7 @@ make test    # pytest
 make lint    # ruff check + ruff format --check
 make lint-kernels  # clang-format --dry-run --Werror sobre kernels/ (Allman, .clang-format del repo)
 make backends      # diagnóstico de backends
+make bench   # benchmark con los valores por defecto (ver "Benchmark")
 make run     # levanta el backend (proceso web + worker)
 make format  # aplica el formato
 make clean   # borra cachés
@@ -278,6 +355,8 @@ Sin `make` (por ejemplo en Windows), los equivalentes desde `TP-Integrador/backe
 ..\.venv\Scripts\python.exe -m pytest                    # test
 ..\.venv\Scripts\python.exe -m ruff check .              # lint
 ..\.venv\Scripts\python.exe -m ruff format --check .     # lint (formato)
+..\.venv\Scripts\python.exe -m app.backends.registry     # backends
+..\.venv\Scripts\python.exe benchmark.py                  # bench
 ..\.venv\Scripts\python.exe -m app.main                  # run
 ```
 
@@ -384,7 +463,7 @@ Tiempos ilustrativos (un trabajo sintético después del warmup y de un trabajo 
 | OpenCL | RTX 2080 SUPER | 1,53 | 0,16 | 16,64 | 1,17 | 1,35 | 0,26 | 41,3 |
 | OpenCL | Radeon integrada (gfx1036) | 14,23 | 3,70 | 303,79 | 15,80 | 3,20 | 1,43 | 404,8 |
 
-No es un benchmark (eso llega en el cambio 5): son corridas sueltas, el total de GPU incluye reservas y staging, y para problemas chicos la GPU puede no ganar.
+No es un benchmark: son corridas sueltas y el total de GPU incluye reservas y staging. Las mediciones con repeticiones sobre tamaños crecientes están en "Benchmark".
 
 ## Precisión numérica esperada
 
@@ -398,7 +477,7 @@ En la práctica, en la máquina de desarrollo, CUDA y OpenCL coinciden con CPU e
 | --- | --- | --- |
 | Strategy | `MosaicBackend` (CPU, CUDA y OpenCL) y `StageTimer` (`PerfCounterTimer`, `CudaEventTimer`, `OpenClProfilingTimer`) | El algoritmo es el mismo; cambia cómo se ejecuta y cómo se mide. |
 | Template Method | `BaseBackend.run()` en `app/core/backend.py`, y un segundo nivel en `GpuBackend` (`app/backends/gpu_base.py`) | Fija la secuencia de etapas, el cronometraje y el progreso; cada backend implementa solo los pasos, así todos miden exactamente las mismas etapas. `GpuBackend` escribe una sola vez qué kernels se lanzan y con qué grillas; CUDA y OpenCL solo implementan las primitivas de su API. |
-| Observer | Callback `on_progress` | El backend no conoce a quién le informa el progreso (un test, el worker, el benchmark). En GPU el aviso se difiere (`DeferredProgressReporter`) hasta que el dispositivo alcanza el marcador encolado. |
+| Observer | Callback `on_progress` | El backend no conoce a quién le informa el progreso (un test o el worker; el benchmark no pasa ninguno, para no sumarle trabajo a la medición). En GPU el aviso se difiere (`DeferredProgressReporter`) hasta que el dispositivo alcanza el marcador encolado. |
 | Factory | `app/backends/registry.py` | Una fábrica por backend importa PyCUDA/PyOpenCL recién al crearlo: importar el proyecto nunca falla sin GPU, y una falla de inicialización queda aislada en el estado de ese backend. |
 | Productor/Consumidor | `app/loading/tile_loader.py`; colas `command_q`/`event_q` entre web y worker; cola interna del worker | El proceso padre reparte tareas (ruta, índice) y los procesos del pool las consumen escribiendo en memoria compartida. La web produce órdenes que consume el worker y el worker produce eventos que consume el hilo lector de la web; dentro del worker, el hilo de órdenes le pasa los trabajos aceptados al hilo de trabajo. |
 | Command | `RunJob` y `Shutdown` en `app/worker/messages.py` | Cada orden es un objeto autocontenido y serializable: el worker la ejecuta sin conocer al proceso web, y `RunJob` ya lleva una lista de backends para que el modo comparación no cambie el protocolo. |

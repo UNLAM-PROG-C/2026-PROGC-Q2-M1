@@ -43,7 +43,7 @@ La verificación por combinación usa los digests por celda y `topk_idx` de `app
 - Tabla Markdown: filas (N, M, M·N), columnas por backend con mediana del total (y mínimo entre paréntesis), más speedup.
 - CSV con una fila por repetición y todas las columnas de `StageTimings`.
 - `matplotlib` con backend `Agg`: total vs. M·N log-log, una línea por backend, marcadores huecos para combinaciones omitidas (en la posición estimada).
-- Punto de cruce: para cada backend GPU, el menor M·N medido en el que `total_gpu < total_cpu`, o "la GPU fue más rápida en todos los tamaños medidos".
+- Punto de cruce: para cada backend GPU, el menor M·N medido a partir del cual `total_gpu < total_cpu` en ese tamaño y en todos los mayores (con mediciones ruidosas, un tamaño chico en el que la GPU gana de casualidad no cuenta como cruce), o "la GPU fue más rápida en todos los tamaños medidos".
 
 ### D5. Calibración reutilizada
 

@@ -9,7 +9,7 @@ endif
 
 CLANG_FORMAT ?= clang-format
 
-.PHONY: build test lint lint-kernels format backends run clean
+.PHONY: build test lint lint-kernels format backends bench run clean
 
 # Compila a bytecode todo el paquete (detecta errores de sintaxis).
 build:
@@ -29,6 +29,10 @@ lint-kernels:
 # Diagnóstico: estado de CPU, CUDA y OpenCL, y GPU preferida.
 backends:
 	$(PYTHON) -m app.backends.registry
+
+# Benchmark sin interfaz con los valores por defecto; deja tabla, CSV y PNG en resultados/.
+bench:
+	$(PYTHON) benchmark.py
 
 # Levanta el backend (proceso web + worker) en MOSAIC_HOST:MOSAIC_PORT. Ctrl+C lo apaga.
 run:

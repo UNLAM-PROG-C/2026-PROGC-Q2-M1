@@ -25,6 +25,8 @@ npm-debug.log*
 *.log
 tmp/
 output/
+# Salidas de benchmark.py (por defecto, backend/resultados/).
+backend/resultados/
 
 # Archivos del sistema operativo y de editores
 .DS_Store

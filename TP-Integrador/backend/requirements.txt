@@ -7,3 +7,5 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 python-dotenv>=1.0
+# Gráfico del benchmark (benchmark.py, backend Agg: no necesita pantalla).
+matplotlib>=3.8

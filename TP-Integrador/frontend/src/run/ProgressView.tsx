@@ -1,5 +1,6 @@
-// Progreso del trabajo en curso: una barra por etapa sobre un tile parchment,
-// actualizada por los eventos `job_progress` del WebSocket. En una comparación
+// Progreso del trabajo en curso ("Generando", igual que el stepper): una barra
+// por etapa sobre un tile parchment, actualizada por los eventos
+// `job_progress` del WebSocket. En una comparación
 // (cambio 4) la carga común va primero y después un grupo de barras por
 // backend, en el orden en que se ejecutan (GPU y después CPU).
 
@@ -9,6 +10,9 @@ import {ProgressBar} from '../components/ProgressBar';
 import {StepTile} from '../components/StepTile';
 import {backendLabel, failureText} from '../result/labels';
 import {BACKEND_STAGES, backendProgress, loadFraction, STAGE_LABELS, type BackendProgress} from './stages';
+
+// Durante la generación no hay navegación: la barra solo explica qué pasa al terminar.
+const DONE_NOTE = 'Al terminar se abre el resultado.';
 
 interface ProgressViewProps
 {
@@ -51,7 +55,7 @@ export function ProgressView({job}: ProgressViewProps): JSX.Element
   const single = backends.length <= 1;
   const singleStages = single ? BACKEND_STAGES.map((stage) => <StageRow key={stage} stage={stage} fraction={backends[0]?.fractions[stage] ?? 0} />) : null;
   return (
-    <StepTile title="Generando el mosaico" tone="parchment" lead={runningLabel(job)}>
+    <StepTile title="Generando" tone="parchment" lead={runningLabel(job)} actions={<p className="step-bar__note">{DONE_NOTE}</p>}>
       <ol className="stage-list">
         <StageRow stage="load" fraction={loadFraction(job?.progress ?? null)} />
         {singleStages}

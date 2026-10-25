@@ -1,4 +1,6 @@
-// Menú "Descargar": el mosaico en resolución completa en PNG o en JPEG.
+// Menú "Descargar": el mosaico en resolución completa en PNG o en JPEG. Va
+// junto al zoom de cada mosaico como píldora secundaria, porque la acción
+// principal del resultado es "Ver estadísticas"; las opciones flotan arriba.
 // Los enlaces apuntan a los endpoints del backend, que responden con
 // `Content-Disposition: attachment` (el atributo `download` no aplica entre orígenes).
 
@@ -19,7 +21,7 @@ export function DownloadMenu({jobId, backend}: DownloadMenuProps): JSX.Element
   const optionsId = `download-options-${backend}`;
   return (
     <div className="download-menu">
-      <PillButton aria-expanded={open} aria-controls={optionsId} onClick={() => setOpen(!open)}>Descargar</PillButton>
+      <PillButton variant="secondary" aria-expanded={open} aria-controls={optionsId} onClick={() => setOpen(!open)}>Descargar</PillButton>
       <ul id={optionsId} className="download-menu__options" hidden={!open}>
         <li><a className="text-link" href={resultUrl(jobId, backend, 'png')} download="mosaico.png">PNG (sin pérdida)</a></li>
         <li><a className="text-link" href={resultUrl(jobId, backend, 'jpg')} download="mosaico.jpg">JPEG (más liviano)</a></li>

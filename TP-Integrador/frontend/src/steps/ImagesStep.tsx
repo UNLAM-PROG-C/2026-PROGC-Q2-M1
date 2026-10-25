@@ -35,14 +35,14 @@ export function ImagesStep({wizard, dispatch}: ImagesStepProps): JSX.Element
     tilesUpload.start((onProgress) => uploadTiles(files, onProgress).then((done) => getTiles(done.tiles_id)));
   };
   const onTarget = (files: File[]): void => targetUpload.start((onProgress) => uploadTarget(files[0], onProgress));
+  const actions = <StepActions primaryLabel="Siguiente" onPrimary={() => dispatch({type: 'NEXT'})} blocker={uploading ? 'subiendo imágenes…' : stepBlocker(wizard)} />;
 
   return (
-    <StepTile title="Imágenes" lead="Subí las fotos que van a formar el mosaico y la imagen que querés reproducir.">
+    <StepTile title="Imágenes" lead="Subí las fotos que van a formar el mosaico y la imagen que querés reproducir." actions={actions}>
       <div className="images-step">
         <TilesZone tiles={wizard.tiles} upload={tilesUpload} onFiles={onTiles} />
         <TargetZone target={wizard.target} upload={targetUpload} onFiles={onTarget} />
       </div>
-      <StepActions primaryLabel="Siguiente" onPrimary={() => dispatch({type: 'NEXT'})} blocker={uploading ? 'subiendo imágenes…' : stepBlocker(wizard)} />
     </StepTile>
   );
 }

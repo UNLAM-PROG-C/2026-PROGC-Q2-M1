@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {useReducer} from 'react';
 import {describe, expect, it} from 'vitest';
 import {makeRules, makeWizard} from '../testing/fixtures';
@@ -73,6 +73,24 @@ describe('ParamsStep: validación', () =>
     expect(screen.getByRole('button', {name: 'Siguiente'})).toBeDisabled();
   });
 
+  it('el error de un campo queda junto al campo y la barra solo avisa que hay que corregirlo (escenario "Error de un campo")', () =>
+  {
+    renderParams();
+    fireEvent.change(screen.getByLabelText('Columnas de la grilla'), {target: {value: '401'}});
+    const bar = screen.getByRole('group', {name: 'Acciones del paso'});
+    expect(screen.getByLabelText('Columnas de la grilla')).toHaveAccessibleDescription(/entre 1 y 400/);
+    expect(within(bar).queryByText(/entre 1 y 400/)).not.toBeInTheDocument();
+    expect(within(bar).getByText('corregí los campos marcados')).toBeInTheDocument();
+  });
+
+  it('sin conexión con el backend el título sigue siendo "Parámetros" y la carga va en la bajada (escenario "Carga en la bajada")', () =>
+  {
+    renderParams({rules: null, params: null});
+    expect(screen.getByRole('heading', {name: 'Parámetros'})).toBeInTheDocument();
+    expect(screen.getByText('Conectando con el backend…')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Siguiente'})).toBeDisabled();
+  });
+
   it('con valores válidos "Siguiente" está habilitado', () =>
   {
     renderParams();
@@ -86,6 +104,7 @@ describe('ParamsStep: validación', () =>
     expect(validateParams(wizard.params!, rules, wizard.target).output).toMatch(/supera el límite/);
     renderParams({rules});
     expect(screen.getByRole('button', {name: 'Siguiente'})).toBeDisabled();
+    expect(within(screen.getByRole('group', {name: 'Acciones del paso'})).getByRole('alert')).toHaveTextContent(/supera el límite/);
   });
 });
 

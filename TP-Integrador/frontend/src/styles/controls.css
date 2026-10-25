@@ -30,11 +30,6 @@
   background: transparent;
 }
 
-.product-tile .pill-button--secondary {
-  border-color: var(--color-primary-on-dark);
-  color: var(--color-primary-on-dark);
-}
-
 /* --- Tarjetas seleccionables (store-utility-card) --- */
 .option-card {
   display: flex;
@@ -315,17 +310,9 @@
   text-align: right;
 }
 
-.confirm-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-sm);
-  text-align: center;
-}
-
-.confirm-panel__buttons {
-  display: flex;
-  gap: var(--space-sm);
+/* Confirmación de un trabajo largo: ocupa la barra de acciones del paso. */
+.step-actions-dialog {
+  width: 100%;
 }
 
 @media (width <= 640px) {

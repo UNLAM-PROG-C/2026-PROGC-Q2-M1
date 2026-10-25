@@ -33,11 +33,12 @@ describe('wizardReducer: transiciones', () =>
     expect(run(running, {type: 'JOB_FAILED', jobId: 'job-1'}).phase).toBe('result');
   });
 
-  it('GO_TO solo permite volver a pasos anteriores', () =>
+  it('GO_TO vuelve a pasos anteriores y avanza solo a pasos alcanzables', () =>
   {
     const state = makeWizard({phase: 'execution'});
     expect(run(state, {type: 'GO_TO', phase: 'images'}).phase).toBe('images');
-    expect(run(makeWizard(), {type: 'GO_TO', phase: 'execution'}).phase).toBe('images');
+    expect(run(makeWizard(), {type: 'GO_TO', phase: 'execution'}).phase).toBe('execution');
+    expect(run(makeWizard({target: null}), {type: 'GO_TO', phase: 'execution'}).phase).toBe('images');
   });
 
   it('volver atrás conserva subidas y forma de ejecución (escenario "Volver atrás")', () =>
@@ -46,6 +47,60 @@ describe('wizardReducer: transiciones', () =>
     const after = run(state, {type: 'BACK'}, {type: 'PARAMS_CHANGED', patch: {cols: '150'}}, {type: 'NEXT'});
     expect(after).toMatchObject({phase: 'execution', mode: 'gpu', tiles: state.tiles, target: state.target});
     expect(after.params?.cols).toBe('150');
+  });
+});
+
+describe('wizardReducer: pasos 4 y 5', () =>
+{
+  const FINISHED = {phase: 'result' as const, jobId: 'job-1', resultReady: true};
+
+  it('de execution a result solo si hay un trabajo de esta pestaña (escenario "De la ejecución al último resultado")', () =>
+  {
+    expect(run(makeWizard({phase: 'execution'}), {type: 'NEXT'}).phase).toBe('execution');
+    expect(run(makeWizard({phase: 'execution', jobId: 'job-1'}), {type: 'NEXT'})).toMatchObject({phase: 'result', jobId: 'job-1'});
+  });
+
+  it('de result a stats solo si el trabajo terminó bien', () =>
+  {
+    expect(run(makeWizard(FINISHED), {type: 'NEXT'}).phase).toBe('stats');
+    expect(run(makeWizard({...FINISHED, resultReady: false}), {type: 'NEXT'}).phase).toBe('result');
+    expect(run(makeWizard({...FINISHED, phase: 'stats'}), {type: 'NEXT'}).phase).toBe('stats');
+  });
+
+  it('BACK desde stats va a result y desde result a execution (escenario "Del resultado a la ejecución")', () =>
+  {
+    const state = makeWizard({...FINISHED, phase: 'stats', mode: 'gpu'});
+    expect(run(state, {type: 'BACK'}).phase).toBe('result');
+    expect(run(state, {type: 'BACK'}, {type: 'BACK'})).toMatchObject({phase: 'execution', mode: 'gpu', jobId: 'job-1'});
+  });
+
+  it('GO_TO salta hacia adelante a las estadísticas solo con un resultado (escenario "Salto hacia adelante")', () =>
+  {
+    expect(run(makeWizard({...FINISHED, phase: 'images'}), {type: 'GO_TO', phase: 'stats'}).phase).toBe('stats');
+    expect(run(makeWizard(), {type: 'GO_TO', phase: 'stats'}).phase).toBe('images');
+    expect(run(makeWizard(), {type: 'GO_TO', phase: 'result'}).phase).toBe('images');
+  });
+
+  it('si se navegó mientras se enviaba el trabajo, JOB_STARTED igual lleva al progreso', () =>
+  {
+    const left = run(makeWizard({...FINISHED, phase: 'execution'}), {type: 'NEXT'}, {type: 'JOB_STARTED', jobId: 'job-2'});
+    expect(left).toMatchObject({phase: 'running', jobId: 'job-2', resultReady: false});
+  });
+
+  it('durante running NEXT, BACK y GO_TO no hacen nada', () =>
+  {
+    const running = makeWizard({phase: 'running', jobId: 'job-1'});
+    const actions: WizardAction[] = [{type: 'NEXT'}, {type: 'BACK'}, {type: 'GO_TO', phase: 'images'}];
+    actions.forEach((action) => expect(run(running, action).phase).toBe('running'));
+  });
+
+  it('resultReady se enciende al terminar bien y se apaga al fallar o al lanzar otro trabajo', () =>
+  {
+    const running = makeWizard({phase: 'running', jobId: 'job-1'});
+    expect(run(running, {type: 'JOB_FINISHED', jobId: 'job-1'}).resultReady).toBe(true);
+    expect(run(running, {type: 'JOB_FAILED', jobId: 'job-1'}).resultReady).toBe(false);
+    const relaunched = run(makeWizard({...FINISHED, phase: 'execution'}), {type: 'JOB_STARTED', jobId: 'job-2'});
+    expect(relaunched).toMatchObject({phase: 'running', jobId: 'job-2', resultReady: false});
   });
 });
 
@@ -84,12 +139,18 @@ describe('wizardReducer: RESTART', () =>
   it('vuelve al paso 1 conservando tiles_id, target_id, parámetros y forma de ejecución', () =>
   {
     const result = run(makeWizard({phase: 'params', mode: 'gpu'}), {type: 'PARAMS_CHANGED', patch: {cols: '120', opacityPercent: 60}});
-    const finished = {...result, phase: 'result' as const, jobId: 'job-1'};
+    const finished = {...result, phase: 'result' as const, jobId: 'job-1', resultReady: true};
     const restarted = run(finished, {type: 'RESTART'});
-    expect(restarted).toMatchObject({phase: 'images', jobId: null, mode: 'gpu'});
+    expect(restarted).toMatchObject({phase: 'images', jobId: null, resultReady: false, mode: 'gpu'});
     expect(restarted.tiles?.tiles_id).toBe('tiles-1');
     expect(restarted.target?.target_id).toBe('target-1');
     expect(restarted.params).toMatchObject({cols: '120', opacityPercent: 60});
+  });
+
+  it('también se reinicia desde las estadísticas', () =>
+  {
+    const stats = makeWizard({phase: 'stats', jobId: 'job-1', resultReady: true});
+    expect(run(stats, {type: 'RESTART'})).toMatchObject({phase: 'images', jobId: null, resultReady: false});
   });
 
   it('no se puede reiniciar mientras corre un trabajo', () =>
@@ -118,7 +179,7 @@ describe('wizardReducer: HYDRATE', () =>
   {
     const job = makeJob({status: 'finished', params: {cols: 80, tile_px: 64, alpha: 0.6, seed: 3, k: 5}});
     const state = run(INITIAL_WIZARD_STATE, {type: 'HYDRATE', state: makeAppState({job})});
-    expect(state.phase).toBe('result');
+    expect(state).toMatchObject({phase: 'result', resultReady: true});
     expect(state.params).toEqual({cols: '80', tilePx: 64, opacityPercent: 60, seed: '3'});
   });
 

@@ -1,10 +1,11 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {describe, expect, it, vi} from 'vitest';
 import type {JobSnapshot} from '../api/types';
 import {makeCpuResult, makeGpuResult, makeJob} from '../testing/fixtures';
 import {prefersLogScale, seriesValues} from './chartData';
 import {ComparisonStats, IDENTICAL_TEXT} from './ComparisonStats';
 import {formatSpeedup, speedup, speedupText} from './speedup';
+import {StatsPanel} from './StatsPanel';
 import {comparisonRows} from './timings';
 
 // jsdom no tiene canvas: el gráfico se reemplaza por un resumen de lo que recibiría Chart.js.
@@ -81,6 +82,16 @@ describe('estadísticas comparativas', () =>
     const verification = {reference: 'cpu' as const, identical: false, differences: {opencl: {topk_cells: 3, image_cells: 1, total_cells: 3}}};
     render(<ComparisonStats job={comparisonJob({verification})} />);
     expect(screen.getByRole('status')).toHaveTextContent('OpenCL: 3 celdas difieren de CPU (diferencias de punto flotante en casi-empates)');
+  });
+
+  it('se ven en el paso 5 con el gráfico, la tabla y "Atrás" y "Volver a empezar" en la barra fija', () =>
+  {
+    render(<StatsPanel job={comparisonJob()} dispatch={vi.fn()} />);
+    expect(screen.getByRole('heading', {name: 'Estadísticas'})).toBeInTheDocument();
+    expect(screen.getByTestId('chart')).toBeInTheDocument();
+    expect(screen.getByRole('table', {name: 'Tiempos por etapa'})).toBeInTheDocument();
+    const buttons = within(screen.getByRole('group', {name: 'Acciones del paso'})).getAllByRole('button').map((button) => button.textContent);
+    expect(buttons).toEqual(['Atrás', 'Volver a empezar']);
   });
 
   it('si la GPU falló muestra solo los tiempos de CPU con el aviso "sin comparación"', () =>

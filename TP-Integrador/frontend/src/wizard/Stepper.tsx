@@ -1,10 +1,12 @@
 // Franja fija del stepper con el estilo `sub-nav-frosted` (design D12): es la
-// única navegación de la pantalla. Los pasos completos se pueden volver a
-// abrir (como `text-link`), el actual va en ink 600 y los futuros apagados.
-// Por debajo de 640 px el CSS muestra la versión compacta "Paso N de 3 · Nombre".
+// única navegación de la pantalla. Todo paso alcanzable (`canReach`), anterior
+// o posterior, se puede abrir como `text-link`; el actual va en ink 600 y el
+// resto apagado. Mientras se genera el mosaico, la posición 4 dice "Generando"
+// y no hay links. Por debajo de 640 px el CSS muestra la versión compacta
+// "Paso N de 5 · Nombre".
 
 import type {Dispatch} from 'react';
-import {CONFIG_STEPS, stepIndex, type Phase, type WizardAction} from './wizardReducer';
+import {canReach, stepIndex, WIZARD_STEPS, type Phase, type WizardAction, type WizardState} from './wizardReducer';
 
 const STEP_NAMES: Readonly<Record<Phase, string>> = {
   images: 'Imágenes',
@@ -12,47 +14,65 @@ const STEP_NAMES: Readonly<Record<Phase, string>> = {
   execution: 'Ejecución',
   running: 'Generando',
   result: 'Resultado',
+  stats: 'Estadísticas',
 };
 
 interface StepperProps
 {
-  phase: Phase;
+  wizard: WizardState;
   dispatch: Dispatch<WizardAction>;
 }
 
 function compactLabel(phase: Phase): string
 {
-  const index = stepIndex(phase);
-  return index >= 0 ? `Paso ${index + 1} de ${CONFIG_STEPS.length} · ${STEP_NAMES[phase]}` : STEP_NAMES[phase];
+  return `Paso ${stepIndex(phase) + 1} de ${WIZARD_STEPS.length} · ${STEP_NAMES[phase]}`;
 }
 
-function StepItem({step, phase, dispatch}: {step: Phase; phase: Phase; dispatch: Dispatch<WizardAction>}): JSX.Element
+function StepItem({step, wizard, dispatch}: {step: Phase; wizard: WizardState; dispatch: Dispatch<WizardAction>}): JSX.Element
 {
   const index = stepIndex(step);
-  const current = stepIndex(phase);
-  const label = `${index + 1}. ${STEP_NAMES[step]}`;
-  if (step === phase)
+  const current = stepIndex(wizard.phase);
+  if (index === current)
   {
-    return <li className="stepper__step stepper__step--current" aria-current="step">{label}</li>;
+    return <li className="stepper__step stepper__step--current" aria-current="step">{`${index + 1}. ${STEP_NAMES[wizard.phase]}`}</li>;
   }
-  const done = current < 0 || index < current;
-  const canReturn = current >= 0 && index < current;
+  const label = `${index + 1}. ${STEP_NAMES[step]}`;
+  const isLink = wizard.phase !== 'running' && canReach(wizard, step);
   return (
-    <li className={done ? 'stepper__step stepper__step--done' : 'stepper__step'}>
-      {canReturn ? <button type="button" className="stepper__link" onClick={() => dispatch({type: 'GO_TO', phase: step})}>{label}</button> : label}
+    <li className={index < current ? 'stepper__step stepper__step--done' : 'stepper__step'}>
+      {isLink ? <button type="button" className="stepper__link" onClick={() => dispatch({type: 'GO_TO', phase: step})}>{label}</button> : label}
     </li>
   );
 }
 
-export function Stepper({phase, dispatch}: StepperProps): JSX.Element
+// Marca: isotipo de cuatro teselas (decorativo, oculto a lectores de pantalla)
+// y la palabra con "Foto" liviano y "mosaico" semibold.
+function Brand(): JSX.Element
+{
+  return (
+    <span className="stepper__brand">
+      <span className="stepper__mark" aria-hidden="true">
+        <span className="stepper__tile" />
+        <span className="stepper__tile stepper__tile--light" />
+        <span className="stepper__tile stepper__tile--mid" />
+        <span className="stepper__tile stepper__tile--ink" />
+      </span>
+      <span>
+        <span className="stepper__brand-light">Foto</span>mosaico
+      </span>
+    </span>
+  );
+}
+
+export function Stepper({wizard, dispatch}: StepperProps): JSX.Element
 {
   return (
     <nav className="stepper" aria-label="Pasos">
-      <span className="stepper__brand">Fotomosaico</span>
+      <Brand />
       <ol className="stepper__steps">
-        {CONFIG_STEPS.map((step) => <StepItem key={step} step={step} phase={phase} dispatch={dispatch} />)}
+        {WIZARD_STEPS.map((step) => <StepItem key={step} step={step} wizard={wizard} dispatch={dispatch} />)}
       </ol>
-      <span className="stepper__compact">{compactLabel(phase)}</span>
+      <span className="stepper__compact">{compactLabel(wizard.phase)}</span>
     </nav>
   );
 }

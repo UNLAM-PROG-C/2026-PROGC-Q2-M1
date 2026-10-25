@@ -34,4 +34,12 @@ describe('progreso de una comparación', () =>
     expect(screen.getAllByRole('listitem')).toHaveLength(6);
     expect(screen.queryByRole('region', {name: 'CPU'})).toBeNull();
   });
+
+  it('el título es "Generando", igual que el stepper, y la barra avisa qué pasa al terminar (escenario "Título durante la generación")', () =>
+  {
+    render(<ProgressView job={makeJob({progress: {backend: 'cpu', stage: 'matching', fraction: 0.5}})} />);
+    expect(screen.getByRole('heading', {name: 'Generando'})).toBeInTheDocument();
+    expect(screen.getByText('Ejecutando en CPU.')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', {name: 'Acciones del paso'})).getByText('Al terminar se abre el resultado.')).toBeInTheDocument();
+  });
 });

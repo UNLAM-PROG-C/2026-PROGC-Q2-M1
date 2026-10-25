@@ -27,12 +27,15 @@
   --color-body-on-dark: #ffffff;
   --color-body-muted: #cccccc;
   --color-ink-muted-80: #333333;
-  --color-ink-muted-48: #7a7a7a;
+
+  /* #6e6e73 y no el #7a7a7a original: llega a 4,5:1 en caption sobre canvas y parchment (consistencia-visual-del-stepper, D8). */
+  --color-ink-muted-48: #6e6e73;
 
   /* --- Bordes --- */
   --color-divider-soft: #f0f0f0;
   --color-hairline: #e0e0e0;
   --color-hairline-soft: rgb(0 0 0 / 8%);
+  --color-hairline-on-dark: rgb(255 255 255 / 12%);
 
   /* Brecha de DESIGN.md: único color de error, solo para validación y fallas. */
   --color-error: #d70015;
@@ -117,11 +120,18 @@
   --selected-border-width: 2px;
   --hairline-width: 1px;
   --transition-fast: 120ms;
-  --viewer-height: 70vh;
+  --viewer-min-height: 240px;
   --tooltip-max-width: 280px;
   --z-stepper: 10;
   --z-tooltip: 20;
   --stage-label-width: 14em;
   --thumb-large-max-height: 216px;
   --chart-height: 320px;
+
+  /* --- Isotipo de la marca (cuatro teselas en el stepper) --- */
+  --brand-tile-size: 8px;
+  --brand-tile-gap: 2px;
+  --brand-tile-radius: 2px;
+  --brand-tile-tone-light: 0.4;
+  --brand-tile-tone-mid: 0.65;
 }

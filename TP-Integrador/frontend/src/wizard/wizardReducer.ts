@@ -1,15 +1,17 @@
 // Estado del stepper (patrón State, design D9 y D13): todas las transiciones
 // válidas viven en este reducer puro, que se testea sin DOM.
-//   images → params → execution → running → result
-//   RESTART: result → images conservando subidas, parámetros y forma de ejecución.
+//   images → params → execution → running → result → stats
+//   NEXT, BACK y GO_TO se mueven en ambos sentidos entre los pasos alcanzables
+//   (`canReach`); durante `running` no hay navegación.
+//   RESTART: result/stats → images conservando subidas, parámetros y forma de ejecución.
 
 import type {AppState, ExecutionMode, ParamRules, TargetSummary, TilesSummary} from '../api/types';
 import {defaultDraft, draftFromParams, firstError, validateParams, type ParamDraft} from '../steps/params';
 
-export type Phase = 'images' | 'params' | 'execution' | 'running' | 'result';
+export type Phase = 'images' | 'params' | 'execution' | 'running' | 'result' | 'stats';
 
-/** Pasos configurables del stepper, en orden. */
-export const CONFIG_STEPS: readonly Phase[] = ['images', 'params', 'execution'];
+/** Pasos del stepper, en orden. `running` no es un paso: ocupa la posición de `result`. */
+export const WIZARD_STEPS: readonly Phase[] = ['images', 'params', 'execution', 'result', 'stats'];
 
 export interface WizardState
 {
@@ -21,6 +23,8 @@ export interface WizardState
   params: ParamDraft | null;
   mode: ExecutionMode;
   jobId: string | null;
+  /** El trabajo `jobId` terminó bien: habilita el paso de estadísticas. */
+  resultReady: boolean;
 }
 
 export type WizardAction =
@@ -48,6 +52,7 @@ export const INITIAL_WIZARD_STATE: WizardState = {
   params: null,
   mode: 'cpu',
   jobId: null,
+  resultReady: false,
 };
 
 function imagesBlocker(state: WizardState): string | null
@@ -88,27 +93,47 @@ export function stepBlocker(state: WizardState): string | null
 
 export function stepIndex(phase: Phase): number
 {
-  return CONFIG_STEPS.indexOf(phase);
+  return WIZARD_STEPS.indexOf(phase === 'running' ? 'result' : phase);
+}
+
+/** Si se puede abrir el paso `phase` con los datos actuales (design D2). */
+export function canReach(state: WizardState, phase: Phase): boolean
+{
+  switch (phase)
+  {
+    case 'images':
+      return true;
+    case 'params':
+      return imagesBlocker(state) === null;
+    case 'execution':
+      return imagesBlocker(state) === null && paramsBlocker(state) === null;
+    case 'result':
+      return state.jobId !== null;
+    case 'stats':
+      return state.resultReady;
+    default:
+      return false;
+  }
+}
+
+/** Mientras se genera el mosaico el stepper no navega: al terminar lleva solo al resultado. */
+function goTo(state: WizardState, phase: Phase): WizardState
+{
+  const canMove = state.phase !== 'running' && phase !== state.phase && canReach(state, phase);
+  return canMove ? {...state, phase} : state;
 }
 
 function next(state: WizardState): WizardState
 {
-  const index = stepIndex(state.phase);
-  const canMove = index >= 0 && index < CONFIG_STEPS.length - 1 && stepBlocker(state) === null;
-  return canMove ? {...state, phase: CONFIG_STEPS[index + 1]} : state;
+  const target = WIZARD_STEPS[stepIndex(state.phase) + 1];
+  return target ? goTo(state, target) : state;
 }
 
+/** El paso anterior siempre se puede abrir: no depende de `canReach`. */
 function back(state: WizardState): WizardState
 {
-  const index = stepIndex(state.phase);
-  return index > 0 ? {...state, phase: CONFIG_STEPS[index - 1]} : state;
-}
-
-/** Solo se puede saltar a un paso ya visitado (anterior al actual). */
-function goTo(state: WizardState, phase: Phase): WizardState
-{
-  const target = stepIndex(phase);
-  return target >= 0 && target < stepIndex(state.phase) ? {...state, phase} : state;
+  const target = WIZARD_STEPS[stepIndex(state.phase) - 1];
+  return target && state.phase !== 'running' ? {...state, phase: target} : state;
 }
 
 function phaseForJob(state: AppState): Partial<WizardState>
@@ -119,7 +144,7 @@ function phaseForJob(state: AppState): Partial<WizardState>
     return {};
   }
   const phase: Phase = job.status === 'running' ? 'running' : 'result';
-  return {phase, jobId: job.job_id, mode: job.mode, params: draftFromParams(job.params)};
+  return {phase, jobId: job.job_id, resultReady: job.status === 'finished', mode: job.mode, params: draftFromParams(job.params)};
 }
 
 /** Primer snapshot: recupera últimas subidas y el trabajo en curso o terminado. */
@@ -141,9 +166,25 @@ function hydrate(state: WizardState, server: AppState): WizardState
   return {...restored, ...phaseForJob(server)};
 }
 
-function jobEnded(state: WizardState, jobId: string): WizardState
+function jobEnded(state: WizardState, jobId: string, finished: boolean): WizardState
 {
-  return state.phase === 'running' && state.jobId === jobId ? {...state, phase: 'result'} : state;
+  return state.phase === 'running' && state.jobId === jobId ? {...state, phase: 'result', resultReady: finished} : state;
+}
+
+/**
+ * El trabajo lo lanzó esta pestaña: se sigue aunque, mientras viajaba
+ * `POST /api/jobs`, se haya navegado fuera de la ejecución (por ejemplo con
+ * "Ver resultado"). Si no, correría en el worker sin que nadie lo muestre.
+ */
+function jobStarted(state: WizardState, jobId: string): WizardState
+{
+  return state.phase === 'running' ? state : {...state, phase: 'running', jobId, resultReady: false};
+}
+
+function restart(state: WizardState): WizardState
+{
+  const canRestart = state.phase === 'result' || state.phase === 'stats';
+  return canRestart ? {...state, phase: 'images', jobId: null, resultReady: false} : state;
 }
 
 function editParams(state: WizardState, patch: Partial<ParamDraft>): WizardState
@@ -176,12 +217,13 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'GO_TO':
       return goTo(state, action.phase);
     case 'JOB_STARTED':
-      return state.phase === 'execution' ? {...state, phase: 'running', jobId: action.jobId} : state;
+      return jobStarted(state, action.jobId);
     case 'JOB_FINISHED':
+      return jobEnded(state, action.jobId, true);
     case 'JOB_FAILED':
-      return jobEnded(state, action.jobId);
+      return jobEnded(state, action.jobId, false);
     case 'RESTART':
-      return state.phase === 'result' ? {...state, phase: 'images', jobId: null} : state;
+      return restart(state);
     default:
       return state;
   }

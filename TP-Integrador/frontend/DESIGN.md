@@ -45,7 +45,7 @@ Store and shop surfaces retain the same chassis but switch modes. The product co
 - **Body On Dark** (`{colors.body-on-dark}` — #ffffff): All text on dark tiles and on the global nav bar.
 - **Body Muted** (`{colors.body-muted}` — #cccccc): Secondary copy on dark tiles where pure white would be too loud.
 - **Ink Muted 80** (`{colors.ink-muted-80}` — #333333): Body text on the white Pearl Button surface — slightly softer than pure black.
-- **Ink Muted 48** (`{colors.ink-muted-48}` — #7a7a7a): Disabled button text and legal fine-print.
+- **Ink Muted 48** (`{colors.ink-muted-48}` — #6e6e73): Disabled button text, legal fine-print and secondary captions. Adjusted from the original #7a7a7a so 14px text reaches 4.5:1 (WCAG AA) on both `canvas` and `canvas-parchment`.
 
 ### Hairlines & Borders
 

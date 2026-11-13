@@ -4,6 +4,20 @@ Un fotomosaico arma una imagen objetivo con una grilla de imágenes chicas (tese
 
 Qué incluye (los cinco cambios de `openspec/`, ya implementados): carga común de imágenes, definición del algoritmo, contrato común de backends, **backend CPU secuencial**, **backends GPU CUDA y OpenCL** con kernels propios, detección de backends, una **aplicación local** (un proceso worker dueño de los contextos de GPU, un proceso web con FastAPI y una interfaz React con un stepper de cinco pasos), el **modo comparación** "Ambas" (CPU y GPU sobre el mismo trabajo, con verificación) y un **benchmark** sin interfaz que mide cómo escala cada backend con el tamaño del problema (ver "Benchmark").
 
+## Integrantes
+
+Trabajo Práctico Integrador — Programación Concurrente — UNLaM
+
+| Nombre y Apellido | DNI |
+| --- | --- |
+| Huergo, Estefanía Belén | 44.787.976 |
+| Justiniano, Máximo | 44.834.085 |
+| Mallia, Leandro Raúl | 43.520.743 |
+| Naspleda, Julián Ezequiel | 44.391.303 |
+| Ramato, Rodrigo Exequiel | 45.129.672 |
+
+Repositorio: [github.com/UNLAM-PROG-C/2026-PROGC-Q2-M1](https://github.com/UNLAM-PROG-C/2026-PROGC-Q2-M1) (carpeta `TP-Integrador/`).
+
 ## Levantar la aplicación
 
 ### Con el script (recomendado)

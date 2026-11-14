@@ -1,0 +1,4 @@
+# Backend OpenCL (GPU AMD, NVIDIA, Intel o Apple). Requiere un driver con OpenCL (ICD):
+# en AMD, Adrenalin (Windows) o ROCm (Linux); en NVIDIA viene con el driver.
+-r requirements.txt
+pyopencl>=2024.1

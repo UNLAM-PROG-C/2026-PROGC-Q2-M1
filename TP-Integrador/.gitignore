@@ -1,0 +1,35 @@
+# Entorno virtual del proyecto (Python, y Node si lo instaló start.sh/start.ps1 con
+# nodeenv). Incluye la huella de instalación .venv/.mosaic-stamp.
+.venv/
+
+# Variables de entorno locales (usar env.example como plantilla)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Frontend (Node + Vite)
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# Temporales y salidas. Las subidas y resultados de la aplicación van a
+# MOSAIC_TEMP_DIR (por defecto, fuera del repo); si se apunta adentro, usar tmp/.
+*.tmp
+*.log
+tmp/
+output/
+# Salidas de benchmark.py (por defecto, backend/resultados/).
+backend/resultados/
+
+# Archivos del sistema operativo y de editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

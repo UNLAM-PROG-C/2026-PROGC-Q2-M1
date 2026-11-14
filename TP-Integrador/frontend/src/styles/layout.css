@@ -1,0 +1,312 @@
+/* Layout de pantalla única: franja fija del stepper (sub-nav-frosted) y un
+   tile por fase, centrado a 980 px (design D12, "Layout sin sidebar"). */
+
+.stepper {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-stepper);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  height: var(--stepper-height);
+  padding: 0 var(--space-lg);
+  background: var(--color-canvas-parchment-frosted);
+  backdrop-filter: var(--frosted-blur);
+  border-bottom: var(--hairline-width) solid var(--color-hairline-soft);
+}
+
+/* Marca a tamaño body y no tagline (21px): así queda al nivel de los pasos en
+   vez de competir con ellos. El isotipo son teselas en tonos del acento más una
+   en ink, sin sumar colores nuevos. */
+.stepper__brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-body-strong-line);
+  letter-spacing: var(--type-body-tracking);
+}
+
+.stepper__brand-light {
+  font-weight: var(--weight-light);
+}
+
+.stepper__mark {
+  display: grid;
+  grid-template-columns: repeat(2, var(--brand-tile-size));
+  gap: var(--brand-tile-gap);
+}
+
+.stepper__tile {
+  width: var(--brand-tile-size);
+  height: var(--brand-tile-size);
+  border-radius: var(--brand-tile-radius);
+  background: var(--color-primary);
+}
+
+.stepper__tile--light {
+  opacity: var(--brand-tile-tone-light);
+}
+
+.stepper__tile--mid {
+  opacity: var(--brand-tile-tone-mid);
+}
+
+.stepper__tile--ink {
+  background: var(--color-ink);
+}
+
+.stepper__steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.stepper__step,
+.stepper__compact {
+  color: var(--color-ink-muted-48);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-strong-line);
+  letter-spacing: var(--type-caption-tracking);
+}
+
+.stepper__step--current {
+  color: var(--color-ink);
+  font-weight: var(--weight-semibold);
+}
+
+.stepper__link {
+  min-height: var(--touch-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-size: inherit;
+}
+
+.stepper__compact {
+  display: none;
+  margin-left: auto;
+  color: var(--color-ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* El paso ocupa al menos el resto de la ventana: así, con poco contenido, la
+   barra de acciones queda igual abajo de todo (consistencia-visual-del-stepper,
+   design D2). `100vh` es el respaldo de los navegadores sin `dvh`. */
+.app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--stepper-height));
+  min-height: calc(100dvh - var(--stepper-height));
+}
+
+/* Resultado (design D3 de navegacion-por-pasos-y-estadisticas): la pantalla
+   mide lo que queda de la ventana debajo del stepper y el visor toma el alto
+   que sobra, así la rueda queda para el zoom. */
+.app-main--fit {
+  height: calc(100vh - var(--stepper-height));
+  height: calc(100dvh - var(--stepper-height));
+}
+
+.connection-banner {
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--color-canvas-parchment);
+  color: var(--color-error);
+  font-size: var(--type-caption-size);
+  text-align: center;
+}
+
+/* Tile de cada paso (StepTile): ocupa el alto que queda en `<main>` y lleva la
+   barra de acciones al fondo. El tono fija el fondo del tile y de la barra. */
+.step-tile {
+  --tile-background: var(--color-canvas);
+  --tile-hairline: var(--color-hairline-soft);
+  --tile-lead-color: var(--color-ink);
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  border-radius: var(--radius-none);
+  background: var(--tile-background);
+}
+
+.step-tile--parchment {
+  --tile-background: var(--color-canvas-parchment);
+}
+
+.step-tile--dark {
+  --tile-background: var(--color-surface-tile-1);
+  --tile-hairline: var(--color-hairline-on-dark);
+  --tile-lead-color: var(--color-body-muted);
+
+  color: var(--color-body-on-dark);
+}
+
+/* Mismo espacio arriba en todos los pasos: el título no cambia de altura. */
+.step-tile__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  width: 100%;
+  max-width: calc(var(--content-max-width) + 2 * var(--space-lg));
+  margin: 0 auto;
+  padding: var(--space-xxl) var(--space-lg) var(--space-xl);
+}
+
+/* Resultado: el contenido (el visor) toma todo el alto libre. */
+.step-tile--fit .step-tile__inner {
+  flex: 1;
+}
+
+.step-tile__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  text-align: center;
+}
+
+.step-tile__title {
+  font-size: var(--type-display-lg-size);
+  line-height: var(--type-display-lg-line);
+  letter-spacing: var(--type-display-lg-tracking);
+}
+
+.step-tile__lead {
+  color: var(--tile-lead-color);
+  font-size: var(--type-tagline-size);
+  line-height: var(--type-tagline-line);
+  letter-spacing: var(--type-tagline-tracking);
+}
+
+/* Barra de acciones fija (design D2): con poco contenido `margin-top: auto` la
+   baja al fondo de la ventana; con más, la página scrollea y `sticky` la deja
+   pegada abajo. Mide siempre lo mismo: una fila de botones y la línea de
+   mensajes, aunque esté vacía (design D3). */
+.step-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: var(--space-sm) var(--space-lg);
+  border-top: var(--hairline-width) solid var(--tile-hairline);
+  background: var(--tile-background);
+}
+
+.step-bar__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: var(--content-max-width);
+  min-height: calc(var(--touch-target) + var(--space-xxs) + var(--type-caption-size) * var(--type-caption-line));
+  margin: 0 auto;
+}
+
+.step-bar__note {
+  color: var(--color-ink-muted-48);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.step-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xxs);
+  width: 100%;
+}
+
+.step-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.step-actions__message {
+  min-height: calc(var(--type-caption-size) * var(--type-caption-line));
+  color: var(--color-ink-muted-48);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  letter-spacing: var(--type-caption-tracking);
+  text-align: center;
+}
+
+.step-actions__message--error {
+  color: var(--color-error);
+}
+
+/* El rojo de error no llega a 4,5:1 sobre el tile oscuro (design D3). */
+.step-tile--dark .step-actions__message {
+  color: var(--color-body-muted);
+}
+
+.step-tile--dark .step-actions__message--error {
+  color: var(--color-body-on-dark);
+  font-weight: var(--weight-semibold);
+}
+
+.step-tile--dark .pill-button--secondary {
+  border-color: var(--color-primary-on-dark);
+  color: var(--color-primary-on-dark);
+}
+
+.step-tile--dark .text-link {
+  color: var(--color-primary-on-dark);
+}
+
+.images-step {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+/* CPU, GPU y Ambas (cambio 4). */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.params-step {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg) var(--space-xl);
+}
+
+@media (width <= 834px) {
+  .images-step,
+  .mode-cards,
+  .params-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (width <= 640px) {
+  .stepper__steps {
+    display: none;
+  }
+
+  .stepper__compact {
+    display: block;
+  }
+
+  .step-tile__inner {
+    padding-right: var(--space-md);
+    padding-left: var(--space-md);
+  }
+
+  .step-bar {
+    padding-right: var(--space-md);
+    padding-left: var(--space-md);
+  }
+
+  .step-tile__title {
+    font-size: var(--type-display-md-size);
+  }
+}
